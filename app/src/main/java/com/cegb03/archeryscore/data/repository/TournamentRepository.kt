@@ -214,12 +214,42 @@ class TournamentRepository @Inject constructor() {
                 Result.success(InvitationContent.Pdf(bytes))
             } else {
                 val doc = Jsoup.parse(ByteArrayInputStream(bytes), "UTF-8", url)
+                val embeddedPdfUrl = findEmbeddedPdfUrl(doc, url)
+                if (embeddedPdfUrl != null) {
+                    val pdfBytes = downloadPdf(embeddedPdfUrl)
+                    return@withContext Result.success(InvitationContent.Pdf(pdfBytes))
+                }
                 val html = parseInvitationHtml(doc)
                 Result.success(InvitationContent.Html(html))
             }
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun findEmbeddedPdfUrl(doc: Document, baseUrl: String): String? {
+        val candidates = mutableListOf<String>()
+
+        doc.select("iframe[src], embed[src], object[data], a[href]").forEach { element ->
+            val attr = when (element.tagName()) {
+                "object" -> "data"
+                else -> "src"
+            }
+            val link = element.attr(attr).ifBlank { element.attr("href") }
+            if (link.endsWith(".pdf", true)) {
+                candidates.add(normalizeUrl(link))
+            }
+        }
+
+        return candidates.firstOrNull()?.let { normalizeUrl(it) }
+    }
+
+    private fun downloadPdf(url: String): ByteArray {
+        val connection = URL(url).openConnection() as HttpURLConnection
+        connection.instanceFollowRedirects = true
+        connection.connectTimeout = 15000
+        connection.readTimeout = 15000
+        return connection.inputStream.use { it.readBytes() }
     }
 
     private fun extractParticipantsClubName(doc: Document): String {

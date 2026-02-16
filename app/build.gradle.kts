@@ -86,6 +86,9 @@ dependencies {
     
     // Biometric
     implementation(libs.androidx.biometric)
+
+    // PDF search (native)
+    implementation(libs.com.tom.roush.pdfbox.android)
     
     // Firebase
     implementation(platform(libs.com.google.firebase.bom))
