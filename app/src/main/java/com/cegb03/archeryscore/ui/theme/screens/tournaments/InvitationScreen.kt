@@ -25,6 +25,7 @@ import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.Card
@@ -225,11 +226,14 @@ private fun PdfContent(file: File?, modifier: Modifier = Modifier) {
         LaunchedEffect(file, targetWidthPx) {
             try {
                 error = null
+                Log.d("ArcheryScore_Debug", "📄 RenderPDF - Starting with file=$file")
                 val bitmaps = withContext(Dispatchers.IO) {
                     renderPdf(file, targetWidthPx)
                 }
+                Log.d("ArcheryScore_Debug", "📄 RenderPDF - Loaded ${bitmaps.size} pages")
                 pages = bitmaps
             } catch (e: Exception) {
+                Log.e("ArcheryScore_Debug", "📄 RenderPDF - Error", e)
                 error = e.message
             }
         }
@@ -304,8 +308,8 @@ private fun PdfContent(file: File?, modifier: Modifier = Modifier) {
                         clip = true
                     },
                 state = listState,
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                contentPadding = PaddingValues(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 itemsIndexed(pages) { index, bitmap ->
                     val aspect = bitmap.height.toFloat() / bitmap.width.toFloat()
@@ -313,8 +317,8 @@ private fun PdfContent(file: File?, modifier: Modifier = Modifier) {
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = null,
                         modifier = Modifier
-                            .width(imageWidth)
-                            .height(imageWidth * aspect)
+                            .fillMaxWidth()
+                            .aspectRatio(1f / aspect)
                     )
                 }
             }
@@ -322,10 +326,17 @@ private fun PdfContent(file: File?, modifier: Modifier = Modifier) {
     }
 }
 
-private fun renderPdf(file: File, targetWidthPx: Int): List<Bitmap> {
+private fun renderPdf(file: File?, targetWidthPx: Int): List<Bitmap> {
     val bitmaps = mutableListOf<Bitmap>()
+    if (file == null) {
+        Log.e("ArcheryScore_Debug", "📄 renderPdf - file is null")
+        return bitmaps
+    }
+    
     val descriptor = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
     val renderer = PdfRenderer(descriptor)
+    
+    Log.d("ArcheryScore_Debug", "📄 renderPdf - PDF has ${renderer.pageCount} pages")
 
     for (i in 0 until renderer.pageCount) {
         val page = renderer.openPage(i)

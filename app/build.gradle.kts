@@ -67,6 +67,7 @@ dependencies {
     
     // Hilt Dependency Injection
     implementation(libs.com.google.dagger.hilt.android)
+    implementation(libs.androidx.compose.foundation.layout)
     kapt(libs.com.google.dagger.hilt.compiler)
     
     // Retrofit & OkHttp
