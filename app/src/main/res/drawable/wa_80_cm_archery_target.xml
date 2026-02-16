@@ -1,0 +1,91 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Zona 1 (blanca exterior) - r=100 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,0 A 100,100 0 1,1 99.99,0 Z" />
+
+    <!-- Zona 2 (blanca) - r=90 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,10 A 90,90 0 1,1 99.99,10 Z" />
+
+    <!-- Zona 3 (negra) - r=80 -->
+    <path
+        android:fillColor="#000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,20 A 80,80 0 1,1 99.99,20 Z" />
+
+    <!-- Zona 4 (negra) - r=70 -->
+    <path
+        android:fillColor="#000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,30 A 70,70 0 1,1 99.99,30 Z" />
+
+    <!-- Zona 5 (azul) - r=60 -->
+    <path
+        android:fillColor="#00b4e4"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,40 A 60,60 0 1,1 99.99,40 Z" />
+
+    <!-- Zona 6 (azul) - r=50 -->
+    <path
+        android:fillColor="#00b4e4"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,50 A 50,50 0 1,1 99.99,50 Z" />
+
+    <!-- Zona 7 (roja) - r=40 -->
+    <path
+        android:fillColor="#f55058"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,60 A 40,40 0 1,1 99.99,60 Z" />
+
+    <!-- Zona 8 (roja) - r=30 -->
+    <path
+        android:fillColor="#f55058"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,70 A 30,30 0 1,1 99.99,70 Z" />
+
+    <!-- Zona 9 (amarilla) - r=20 -->
+    <path
+        android:fillColor="#ffe553"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,80 A 20,20 0 1,1 99.99,80 Z" />
+
+    <!-- Zona 10 (amarilla - bullseye) - r=10 -->
+    <path
+        android:fillColor="#ffe553"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,90 A 10,10 0 1,1 99.99,90 Z" />
+
+    <!-- Zona X (amarilla - bullseye) - r=5 -->
+    <path
+        android:fillColor="#ffe553"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 100,95 A 5,5 0 1,1 99.99,95 Z" />
+
+    <!-- Zona + (negro - bullseye) -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth=".5"
+        android:pathData="M 100,98 L 100,102 M 98,100 L 102,100" />
+
+</vector>
