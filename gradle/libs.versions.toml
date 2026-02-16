@@ -17,6 +17,8 @@ datastore = "1.0.0"
 coil = "2.5.0"
 biometric = "1.1.0"
 firebaseBom = "33.2.0"
+pdfbox = "2.0.27.0"
+foundationLayout = "1.10.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -51,6 +53,8 @@ androidx-biometric = { group = "androidx.biometric", name = "biometric", version
 com-google-firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 com-google-firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics-ktx" }
 com-google-firebase-auth = { group = "com.google.firebase", name = "firebase-auth-ktx" }
+com-tom-roush-pdfbox-android = { group = "com.tom-roush", name = "pdfbox-android", version.ref = "pdfbox" }
+androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

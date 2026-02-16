@@ -1,5 +1,6 @@
 package com.cegb03.archeryscore.ui.theme.screens.tournaments
 
+import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,7 +52,22 @@ fun ParticipantsScreen(
     val state by viewModel.state.collectAsState()
 
     LaunchedEffect(url) {
+        Log.d("ArcheryScore_Debug", "👥 ParticipantsScreen - load url=$url")
         viewModel.load(url)
+    }
+
+    LaunchedEffect(state.isLoading, state.errorMessage, state.data) {
+        when {
+            state.isLoading -> Log.d("ArcheryScore_Debug", "👥 ParticipantsScreen - loading")
+            state.errorMessage != null -> Log.d(
+                "ArcheryScore_Debug",
+                "👥 ParticipantsScreen - error=${state.errorMessage}"
+            )
+            state.data != null -> Log.d(
+                "ArcheryScore_Debug",
+                "👥 ParticipantsScreen - loaded rows=${state.data?.rows?.size ?: 0}"
+            )
+        }
     }
 
     BackHandler(enabled = true) { onClose() }

@@ -67,6 +67,7 @@ dependencies {
     
     // Hilt Dependency Injection
     implementation(libs.com.google.dagger.hilt.android)
+    implementation(libs.androidx.compose.foundation.layout)
     kapt(libs.com.google.dagger.hilt.compiler)
     
     // Retrofit & OkHttp
@@ -86,6 +87,9 @@ dependencies {
     
     // Biometric
     implementation(libs.androidx.biometric)
+
+    // PDF search (native)
+    implementation(libs.com.tom.roush.pdfbox.android)
     
     // Firebase
     implementation(platform(libs.com.google.firebase.bom))
