@@ -1,0 +1,154 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- Diana de Arquería Olímpica WA - Oficial -->
+
+    <!-- Zone 1: Blanco exterior (r=99.75) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 0.25,100 A 99.75,99.75 0 1,1 199.75,100 A 99.75,99.75 0 1,1 0.25,100 Z" />
+
+    <!-- Zone 2: Blanco interior (r=89.75) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 10.25,100 A 89.75,89.75 0 1,1 189.75,100 A 89.75,89.75 0 1,1 10.25,100 Z" />
+
+    <!-- Zone 3: Negro exterior (r=80) -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M 20,100 A 80,80 0 1,1 180,100 A 80,80 0 1,1 20,100 Z" />
+
+    <!-- Zone 4: Negro interior (r=69.75) -->
+    <path
+        android:fillColor="#000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="0.5"
+        android:pathData="M 30.25,100 A 69.75,69.75 0 1,1 169.75,100 A 69.75,69.75 0 1,1 30.25,100 Z" />
+
+    <!-- Zone 5: Azul exterior (r=60) -->
+    <path
+        android:fillColor="#00b4e4"
+        android:pathData="M 40,100 A 60,60 0 1,1 160,100 A 60,60 0 1,1 40,100 Z" />
+
+    <!-- Zone 6: Azul interior (r=49.75) -->
+    <path
+        android:fillColor="#00b4e4"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 50.25,100 A 49.75,49.75 0 1,1 149.75,100 A 49.75,49.75 0 1,1 50.25,100 Z" />
+
+    <!-- Zone 7: Rojo exterior (r=39.75) -->
+    <path
+        android:fillColor="#f55058"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 60.25,100 A 39.75,39.75 0 1,1 139.75,100 A 39.75,39.75 0 1,1 60.25,100 Z" />
+
+    <!-- Zone 8: Rojo interior (r=29.75) -->
+    <path
+        android:fillColor="#f55058"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 70.25,100 A 29.75,29.75 0 1,1 129.75,100 A 29.75,29.75 0 1,1 70.25,100 Z" />
+
+    <!-- Zone 9: Amarillo exterior (r=19.75) -->
+    <path
+        android:fillColor="#ffe553"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 80.25,100 A 19.75,19.75 0 1,1 119.75,100 A 19.75,19.75 0 1,1 80.25,100 Z" />
+
+    <!-- Zone 10: Amarillo interior (r=9.75) -->
+    <path
+        android:fillColor="#ffe553"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 90.25,100 A 9.75,9.75 0 1,1 109.75,100 A 9.75,9.75 0 1,1 90.25,100 Z" />
+
+    <!-- Inner bullseye (r=4.75) -->
+    <path
+        android:fillColor="#ffe553"
+        android:strokeColor="#000000"
+        android:strokeWidth="0.25"
+        android:pathData="M 95.25,100 A 4.75,4.75 0 1,1 104.75,100 A 4.75,4.75 0 1,1 95.25,100 Z" />
+
+    <!-- Crosshair center -->
+    <path
+        android:strokeColor="#000000"
+        android:strokeWidth="0.5"
+        android:pathData="M 99.9,100 L 100.1,100 M 100,99.9 L 100,100.1" />
+
+    <!-- NÚMEROS EN CADA ZONA -->
+    
+    <!-- ZONA SUPERIOR (posiciones: 95, 85, 75, 65, 55) -->
+    <!-- Número 1 - Blanco exterior superior -->
+    <path android:fillColor="#000000" android:pathData="M 98.5,93 L 101.5,93 L 101.5,97 L 98.5,97 Z" />
+    
+    <!-- Número 2 - Blanco interior superior -->
+    <path android:fillColor="#000000" android:pathData="M 98,83 L 102,83 L 102,85 L 100,85 L 102,87 L 102,89 L 98,89 Z" />
+    
+    <!-- Número 3 - Negro exterior superior -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 98,73 L 102,73 L 102,79 L 98,79 L 98,77 L 100,77 L 100,75 L 98,75 Z" />
+    
+    <!-- Número 4 - Negro interior superior -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 98,63 L 100,63 L 100,67 L 102,67 L 102,69 L 98,69 L 98,67 L 100,67 L 98,65 Z" />
+    
+    <!-- Número 5 - Azul exterior superior -->
+    <path android:fillColor="#000000" android:pathData="M 102,53 L 98,53 L 98,55 L 100,55 L 98,57 L 98,59 L 102,59 Z" />
+    
+    <!-- ZONA DERECHA (posiciones: 95, 85, 75, 65, 55) -->
+    <!-- Número 6 - Azul interior derecha -->
+    <path android:fillColor="#000000" android:pathData="M 107,93 L 111,93 L 111,101 L 107,101 L 107,99 L 109,99 L 109,97 L 107,97 Z" />
+    
+    <!-- Número 7 - Rojo exterior derecha -->
+    <path android:fillColor="#000000" android:pathData="M 107,83 L 111,83 L 109,89 L 107,89 L 109,85 L 107,85 Z" />
+    
+    <!-- Número 8 - Rojo interior derecha -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 107,73 L 111,73 L 111,79 L 107,79 Z M 109,75 L 109,77" />
+    
+    <!-- Número 9 - Amarillo exterior derecha -->
+    <path android:fillColor="#000000" android:pathData="M 107,63 L 111,63 L 111,69 L 107,69 L 107,67 L 109,67 L 109,65 L 107,65 Z" />
+    
+    <!-- Número 10 - Amarillo interior derecha -->
+    <path android:fillColor="#000000" android:pathData="M 106,53 L 110,53 L 110,55 L 108,55 L 110,57 L 110,59 L 106,59 Z M 108,57 L 108,59" />
+    
+    <!-- ZONA INFERIOR (posiciones: 95, 85, 75, 65, 55 pero invertidas) -->
+    <!-- Número 1 - Blanco exterior inferior -->
+    <path android:fillColor="#000000" android:pathData="M 98.5,107 L 101.5,107 L 101.5,111 L 98.5,111 Z" />
+    
+    <!-- Número 2 - Blanco interior inferior -->
+    <path android:fillColor="#000000" android:pathData="M 98,117 L 102,117 L 102,119 L 100,119 L 102,121 L 102,123 L 98,123 Z" />
+    
+    <!-- Número 3 - Negro exterior inferior -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 98,127 L 102,127 L 102,133 L 98,133 L 98,131 L 100,131 L 100,129 L 98,129 Z" />
+    
+    <!-- Número 4 - Negro interior inferior -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 98,137 L 100,137 L 100,141 L 102,141 L 102,143 L 98,143 L 98,141 L 100,141 L 98,139 Z" />
+    
+    <!-- Número 5 - Azul exterior inferior -->
+    <path android:fillColor="#000000" android:pathData="M 102,147 L 98,147 L 98,149 L 100,149 L 98,151 L 98,153 L 102,153 Z" />
+    
+    <!-- ZONA IZQUIERDA (posiciones: 95, 85, 75, 65, 55) -->
+    <!-- Número 6 - Azul interior izquierda -->
+    <path android:fillColor="#000000" android:pathData="M 89,93 L 93,93 L 93,101 L 89,101 L 89,99 L 91,99 L 91,97 L 89,97 Z" />
+    
+    <!-- Número 7 - Rojo exterior izquierda -->
+    <path android:fillColor="#000000" android:pathData="M 89,83 L 93,83 L 91,89 L 89,89 L 91,85 L 89,85 Z" />
+    
+    <!-- Número 8 - Rojo interior izquierda -->
+    <path android:fillColor="#FFFFFF" android:pathData="M 89,73 L 93,73 L 93,79 L 89,79 Z M 91,75 L 91,77" />
+    
+    <!-- Número 9 - Amarillo exterior izquierda -->
+    <path android:fillColor="#000000" android:pathData="M 89,63 L 93,63 L 93,69 L 89,69 L 89,67 L 91,67 L 91,65 L 89,65 Z" />
+    
+    <!-- Número 10 - Amarillo interior izquierda -->
+    <path android:fillColor="#000000" android:pathData="M 90,53 L 94,53 L 94,55 L 92,55 L 94,57 L 94,59 L 90,59 Z M 92,57 L 92,59" />
+
+</vector>

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "428870165249",
+    "project_id": "archeryscore-afe75",
+    "storage_bucket": "archeryscore-afe75.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:428870165249:android:2721c1bea8728be5bc7100",
+        "android_client_info": {
+          "package_name": "com.cegb03.archeryscore"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "428870165249-e3nmrkefqaq2shln9rn1dmn91fg1otsp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAWyBz2K1lUn7nTOqZT3jVO8GZX0Gisc6s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "428870165249-e3nmrkefqaq2shln9rn1dmn91fg1otsp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

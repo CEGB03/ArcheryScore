@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.cegb03.archeryscore" />
+                  <option name="mobileSdkAppId" value="1:428870165249:android:2721c1bea8728be5bc7100" />
+                  <option name="projectId" value="archeryscore-afe75" />
+                  <option name="projectNumber" value="428870165249" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />
