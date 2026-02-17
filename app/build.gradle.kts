@@ -90,6 +90,14 @@ dependencies {
 
     // PDF search (native)
     implementation(libs.com.tom.roush.pdfbox.android)
+
+    // Room (local storage)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    kapt(libs.androidx.room.compiler)
+
+    // Location (weather)
+    implementation(libs.com.google.android.gms.play.services.location)
     
     // Firebase
     implementation(platform(libs.com.google.firebase.bom))

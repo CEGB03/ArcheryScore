@@ -37,6 +37,7 @@ import com.cegb03.archeryscore.ui.theme.ArcheryScoreTheme
 import com.cegb03.archeryscore.ui.theme.screens.access.AccessScreen
 import com.cegb03.archeryscore.ui.theme.screens.login.LoginScreen
 import com.cegb03.archeryscore.ui.theme.screens.register.RegisterScreen
+import com.cegb03.archeryscore.ui.theme.screens.trainings.TrainingsScreen
 import com.cegb03.archeryscore.ui.theme.screens.tournaments.TournamentsScreen
 import com.cegb03.archeryscore.viewmodel.AuthViewModel
 import dagger.hilt.android.AndroidEntryPoint
@@ -118,8 +119,7 @@ fun MainAppContent() {
                     )
                 }
                 AppDestinations.REGISTROS -> {
-                    Text(
-                        text = "Registro de entrenamientos",
+                    TrainingsScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)
@@ -161,7 +161,7 @@ enum class AppDestinations(
     val icon: ImageVector,
 ) {
     INICIO("Inicio", Icons.Default.Home),
-    REGISTROS("Registros", Icons.Default.Event),
+    REGISTROS("Entrenamientos", Icons.Default.Event),
     TORNEOS("Torneos", Icons.Default.EmojiEvents),
     PERFIL("Perfil", Icons.Default.AccountBox),
 }
