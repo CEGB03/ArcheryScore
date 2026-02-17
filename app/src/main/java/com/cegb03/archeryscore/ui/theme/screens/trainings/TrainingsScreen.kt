@@ -1,6 +1,7 @@
 package com.cegb03.archeryscore.ui.theme.screens.trainings
 
 import android.Manifest
+import android.R.attr.enabled
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -11,14 +12,24 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -27,10 +38,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -55,12 +70,26 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 //import androidx.compose.ui.text.input.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cegb03.archeryscore.data.local.training.TrainingEntity
@@ -72,6 +101,7 @@ import com.cegb03.archeryscore.viewmodel.TrainingsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @Composable
 fun TrainingsScreen(
@@ -95,9 +125,6 @@ fun TrainingsScreen(
             onBack = { viewModel.selectTraining(null) },
             onConfirmEnd = { endId, scoresText, totalScore ->
                 viewModel.confirmEnd(endId, scoresText, totalScore)
-            },
-            onAddEnd = {
-                viewModel.addNewEnd()
             }
         )
         return
@@ -176,7 +203,7 @@ private fun TrainingsList(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
+                contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(trainings) { training ->
@@ -256,20 +283,63 @@ private fun TrainingCard(training: TrainingEntity, onClick: () -> Unit) {
 private fun TrainingDetailScreen(
     detail: TrainingWithEnds?,
     onBack: () -> Unit,
-    onConfirmEnd: (Long, String, Int) -> Unit,
-    onAddEnd: () -> Unit = { }
+    onConfirmEnd: (Long, String, Int) -> Unit
 ) {
     Log.d("ArcheryScore_Debug", "TrainingDetailScreen called - detail: ${detail != null}, training: ${detail?.training != null}, ends: ${detail?.ends?.size ?: 0}")
     val training = detail?.training
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
 
+    var showInfoMenu by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Planilla") },
+                title = { Text("Planilla - ${training?.archerName?.takeIf { it.isNotBlank() } ?: "Entrenamiento"}") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Volver")
+                    }
+                },
+                actions = {
+                    Box {
+                        IconButton(onClick = { showInfoMenu = !showInfoMenu }) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Información",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        androidx.compose.material3.DropdownMenu(
+                            expanded = showInfoMenu,
+                            onDismissRequest = { showInfoMenu = false },
+                            modifier = Modifier.wrapContentHeight()
+                        ) {
+                            if (training != null) {
+                                Column(
+                                    modifier = Modifier
+                                        .padding(16.dp)
+                                        .width(300.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text("Información del entrenamiento", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Distancia: ${training.distanceMeters} m", style = MaterialTheme.typography.labelSmall)
+                                    Text("Categoría: ${training.category}", style = MaterialTheme.typography.labelSmall)
+                                    Text("Blanco: ${training.targetType}", style = MaterialTheme.typography.labelSmall)
+                                    Text("Flechas por tanda: ${training.arrowsPerEnd}", style = MaterialTheme.typography.labelSmall)
+                                    Text("Tandas: ${training.endsCount}", style = MaterialTheme.typography.labelSmall)
+                                    
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Sistema: ${if (training.puntajeSystem == "X_TO_M") "X a M" else "11 a M"} (${training.targetZoneCount} zonas)", style = MaterialTheme.typography.labelSmall)
+                                    
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Clima:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                                    Text("Viento: ${training.windSpeed ?: "-"} ${training.windSpeedUnit ?: ""}", style = MaterialTheme.typography.labelSmall)
+                                    Text("Dirección: ${formatWindDirection(training.windDirectionDegrees)}", style = MaterialTheme.typography.labelSmall)
+                                    Text("Cielo: ${training.skyCondition ?: "-"}", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
                     }
                 }
             )
@@ -330,8 +400,7 @@ private fun TrainingDetailScreen(
                         detail = detail,
                         targetZoneCount = training.targetZoneCount,
                         puntajeSystem = training.puntajeSystem,
-                        onConfirmEnd = onConfirmEnd,
-                        onAddEnd = onAddEnd
+                        onConfirmEnd = onConfirmEnd
                     )
                 }
                 1 -> {
@@ -349,8 +418,7 @@ private fun TrainingSheetTab(
     detail: TrainingWithEnds,
     targetZoneCount: Int,
     puntajeSystem: String,
-    onConfirmEnd: (Long, String, Int) -> Unit,
-    onAddEnd: () -> Unit = { }
+    onConfirmEnd: (Long, String, Int) -> Unit
 ) {
     Log.d("ArcheryScore_Debug", "TrainingSheetTab - training: ${training.id}, ends: ${detail.ends.size}, zones: $targetZoneCount, system: $puntajeSystem")
     
@@ -378,44 +446,10 @@ private fun TrainingSheetTab(
     val pagerState = rememberPagerState(pageCount = { totalEnds })
 
     Column(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(bottom = 120.dp)
     ) {
-        // Header con información del entrenamiento
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 300.dp),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = training.archerName?.takeIf { it.isNotBlank() } ?: "Entrenamiento",
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Distancia: ${training.distanceMeters} m")
-                        Text("Categoria: ${training.category}")
-                        Text("Blanco: ${training.targetType}")
-                        Text("Flechas por tanda: ${training.arrowsPerEnd}")
-                        Text("Tandas: ${training.endsCount}")
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Sistema: ${if (safePuntajeSystem == "X_TO_M") "X a M" else "11 a M"} ($safeTargetZoneCount zonas)")
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text("Clima:")
-                        Text(text = "Viento: ${training.windSpeed ?: "-"} ${training.windSpeedUnit ?: ""}")
-                        Text(text = "Direccion: ${formatWindDirection(training.windDirectionDegrees)}")
-                        Text(text = "Cielo: ${training.skyCondition ?: "-"}")
-                    }
-                }
-            }
-        }
-
         // HorizontalPager para las tandas (una por página)
         HorizontalPager(
             state = pagerState,
@@ -437,120 +471,281 @@ private fun TrainingSheetTab(
                 return@HorizontalPager
             }
             
-            var scoresInput by remember(end.id) {
-                mutableStateOf(normalizeScoresText(end.scoresText))
+            // Parsear los puntajes existentes a una lista mutable
+            val existingScores = remember(end.id) { 
+                parseScores(end.scoresText ?: "").map { 
+                    if (it.isX) "X" else if (it.isMiss) "M" else it.score.toString() 
+                }.toMutableStateList()
             }
-            var showErrorDialog by remember { mutableStateOf(false) }
-            var errorMessage by remember { mutableStateOf<String?>(null) }
-            var realTimeError by remember { mutableStateOf<String?>(null) }
+            
             val isConfirmed = end.confirmedAt != null
+            val validScores = remember(safeTargetZoneCount, safePuntajeSystem) {
+                getValidScores(safeTargetZoneCount, safePuntajeSystem)
+            }
+            
+            // Estado para drag & drop
+            var draggedScore by remember { mutableStateOf<String?>(null) }
+            var dragOffset by remember { mutableStateOf(Offset.Zero) }
+            var dropAreaBounds by remember { mutableStateOf<Pair<Offset, IntSize>?>(null) }
 
-            LazyColumn(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                contentPadding = PaddingValues(vertical = 16.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text("Tanda ${end.endNumber}", style = MaterialTheme.typography.titleMedium)
-                            Spacer(modifier = Modifier.height(12.dp))
-                            OutlinedTextField(
-                                value = scoresInput,
-                                onValueChange = { newValue ->
-                                    scoresInput = newValue
-                                    // Validación en tiempo real
-                                    val (isValid, error) = validateScoreInput(newValue, safeTargetZoneCount, safePuntajeSystem)
-                                    realTimeError = if (!isValid && newValue.isNotBlank()) error else null
-                                },
-                                label = { Text("Tiradas (ej: 10, 9, X, M)") },
-                                enabled = !isConfirmed,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                modifier = Modifier.fillMaxWidth(),
-                                isError = realTimeError != null
+                // Título de la tanda
+                Text(
+                    text = "Tanda ${end.endNumber}",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = if (isConfirmed) "✓ Confirmada" else "${existingScores.size}/${training.arrowsPerEnd} flechas",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (isConfirmed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Área de drop - donde se sueltan los puntajes arrastrados
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(180.dp)
+                        .onGloballyPositioned { coordinates ->
+                            dropAreaBounds = Pair(
+                                coordinates.positionInRoot(),
+                                coordinates.size
                             )
-                            if (realTimeError != null) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = realTimeError ?: "",
-                                    color = MaterialTheme.colorScheme.error,
-                                    style = MaterialTheme.typography.labelSmall
+                        },
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (draggedScore != null) 
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                        else 
+                            MaterialTheme.colorScheme.surface
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onPress = { offset ->
+                                        if (draggedScore != null && !isConfirmed && existingScores.size < training.arrowsPerEnd) {
+                                            existingScores.add(draggedScore!!)
+                                            draggedScore = null
+                                            dragOffset = Offset.Zero
+                                        }
+                                    }
                                 )
                             }
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            .padding(16.dp)
+                    ) {
+                        if (existingScores.isEmpty()) {
+                            Column(
+                                modifier = Modifier.align(Alignment.Center),
+                                horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(if (isConfirmed) "✓ Confirmada" else "⊙ Pendiente")
-                                Button(
-                                    onClick = {
-                                        val (isValid, error) = validateScoreInput(scoresInput, safeTargetZoneCount, safePuntajeSystem)
-                                        if (!isValid) {
-                                            errorMessage = error
-                                            showErrorDialog = true
-                                        } else {
-                                            val parsed = parseScores(scoresInput)
-                                            if (parsed.isNotEmpty()) {
-                                                val sorted = sortScores(parsed)
-                                                val sortedText = formatScores(sorted)
-                                                scoresInput = sortedText
-                                                val total = parsed.sumOf { it.score }
-                                                onConfirmEnd(end.id, sortedText, total)
-                                            }
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = if (draggedScore != null) "Suelta aquí" else "Arrastra puntajes aquí",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        } else {
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(5),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(existingScores.size) { index ->
+                                    val score = existingScores[index]
+                                    Box(
+                                        modifier = Modifier
+                                            .aspectRatio(1f)
+                                            .background(
+                                                color = MaterialTheme.colorScheme.primaryContainer,
+                                                shape = MaterialTheme.shapes.medium
+                                            )
+                                            .clickable(enabled = !isConfirmed) {
+                                                existingScores.removeAt(index)
+                                            },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (!isConfirmed) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Eliminar",
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(2.dp)
+                                                    .size(14.dp),
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                            )
                                         }
-                                    },
-                                    enabled = !isConfirmed && scoresInput.isNotBlank()
-                                ) {
-                                    Text("Confirmar")
+                                        Text(
+                                            text = score,
+                                            style = MaterialTheme.typography.titleLarge,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
                                 }
                             }
-                            if (end.totalScore != null) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text("Puntajes:", style = MaterialTheme.typography.labelMedium)
-                                    Text(scoresInput, style = MaterialTheme.typography.labelMedium)
+                        }
+                        
+                        // Mostrar total en la esquina
+                        if (existingScores.isNotEmpty()) {
+                            val total = remember(existingScores.toList()) {
+                                existingScores.sumOf { score ->
+                                    when (score) {
+                                        "X" -> 10
+                                        "M" -> 0
+                                        else -> score.toIntOrNull() ?: 0
+                                    }
                                 }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Text("Total: ${end.totalScore}", style = MaterialTheme.typography.titleSmall)
-                                }
+                            }
+                            Card(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                )
+                            ) {
+                                Text(
+                                    text = "$total pts",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
                             }
                         }
                     }
                 }
-            }
 
-            if (showErrorDialog) {
-                AlertDialog(
-                    onDismissRequest = {
-                        scoresInput = ""
-                        showErrorDialog = false
-                    },
-                    title = { Text("Error en los puntajes") },
-                    text = { Text(errorMessage ?: "Error desconocido") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            scoresInput = ""
-                            showErrorDialog = false
-                        }) {
-                            Text("Aceptar")
+                // Botones de puntaje arrastrables
+                if (!isConfirmed) {
+                    Text(
+                        text = "Arrastra o toca para agregar:",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(6),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(validScores.size) { index ->
+                            val score = validScores[index]
+                            Box(
+                                modifier = Modifier
+                                    .aspectRatio(1f)
+                                    .graphicsLayer {
+                                        if (draggedScore == score) {
+                                            translationX = dragOffset.x
+                                            translationY = dragOffset.y
+                                            alpha = 0.7f
+                                            scaleX = 1.2f
+                                            scaleY = 1.2f
+                                        }
+                                    }
+                                    .background(
+                                        color = if (existingScores.size >= training.arrowsPerEnd)
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                        else
+                                            MaterialTheme.colorScheme.primary,
+                                        shape = MaterialTheme.shapes.medium
+                                    )
+                                    .pointerInput(score) {
+                                        detectDragGestures(
+                                            onDragStart = {
+                                                if (existingScores.size < training.arrowsPerEnd) {
+                                                    draggedScore = score
+                                                    dragOffset = Offset.Zero
+                                                }
+                                            },
+                                            onDrag = { change, dragAmount ->
+                                                change.consume()
+                                                if (draggedScore == score) {
+                                                    dragOffset += dragAmount
+                                                }
+                                            },
+                                            onDragEnd = {
+                                                if (draggedScore == score) {
+                                                    // Verificar si se soltó en el área de drop
+                                                    dropAreaBounds?.let { (dropPos, dropSize) ->
+                                                        val finalPos = dragOffset
+                                                        if (finalPos.x >= dropPos.x && finalPos.x <= dropPos.x + dropSize.width &&
+                                                            finalPos.y >= dropPos.y && finalPos.y <= dropPos.y + dropSize.height) {
+                                                            if (existingScores.size < training.arrowsPerEnd) {
+                                                                existingScores.add(score)
+                                                            }
+                                                        }
+                                                    }
+                                                    draggedScore = null
+                                                    dragOffset = Offset.Zero
+                                                }
+                                            },
+                                            onDragCancel = {
+                                                draggedScore = null
+                                                dragOffset = Offset.Zero
+                                            }
+                                        )
+                                    }
+                                    .clickable(enabled = existingScores.size < training.arrowsPerEnd) {
+                                        existingScores.add(score)
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = score,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (existingScores.size >= training.arrowsPerEnd)
+                                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    else
+                                        MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
                         }
                     }
-                )
+                }
+
+                // Botón confirmar
+                Button(
+                    onClick = {
+                        if (existingScores.isNotEmpty()) {
+                            val parsed = existingScores.map { score ->
+                                when (score) {
+                                    "X" -> ParsedScore(10, isX = true, isMiss = false)
+                                    "M" -> ParsedScore(0, isX = false, isMiss = true)
+                                    else -> ParsedScore(score.toIntOrNull() ?: 0, isX = false, isMiss = false)
+                                }
+                            }
+                            val sorted = sortScores(parsed)
+                            val sortedText = formatScores(sorted)
+                            val total = parsed.sumOf { it.score }
+                            onConfirmEnd(end.id, sortedText, total)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = existingScores.size == training.arrowsPerEnd && !isConfirmed
+                ) {
+                    Text(if (isConfirmed) "Confirmada" else "Confirmar tanda")
+                }
             }
         }
 
@@ -587,15 +782,6 @@ private fun TrainingSheetTab(
                 }
             }
             Text("Tanda ${pagerState.currentPage + 1} de ${detail.ends.size}")
-            Button(
-                onClick = {
-                    Log.d("ArcheryScore_Debug", "Add tanda button clicked")
-                    onAddEnd()
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("+ Agregar tanda")
-            }
         }
     }
 }
@@ -604,7 +790,7 @@ private fun TrainingSheetTab(
 private fun TrainingStatsTab(detail: TrainingWithEnds) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Estadísticas por tanda
