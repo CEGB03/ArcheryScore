@@ -3,8 +3,9 @@ package com.cegb03.archeryscore.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cegb03.archeryscore.data.local.training.SeriesEntity
 import com.cegb03.archeryscore.data.local.training.TrainingEntity
-import com.cegb03.archeryscore.data.local.training.TrainingWithEnds
+import com.cegb03.archeryscore.data.local.training.TrainingWithSeries
 import com.cegb03.archeryscore.data.model.WeatherSnapshot
 import com.cegb03.archeryscore.data.repository.TrainingRepository
 import com.cegb03.archeryscore.data.repository.WeatherRepository
@@ -18,6 +19,22 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+// Data class para representar una serie en el formulario
+data class SeriesFormData(
+    val distanceMeters: Int,
+    val category: String,
+    val targetType: String,
+    val arrowsPerEnd: Int,
+    val endsCount: Int,
+    val targetZoneCount: Int = 10,
+    val puntajeSystem: String = "X_TO_M",
+    val temperature: Double?,
+    val weather: WeatherSnapshot?,
+    val locationLat: Double?,
+    val locationLon: Double?,
+    val weatherSource: String?
+)
+
 @HiltViewModel
 class TrainingsViewModel @Inject constructor(
     private val trainingRepository: TrainingRepository,
@@ -26,14 +43,14 @@ class TrainingsViewModel @Inject constructor(
 
     private val selectedTrainingId = MutableStateFlow<Long?>(null)
 
-    val trainings: StateFlow<List<TrainingEntity>> = trainingRepository
-        .observeTrainings()
+    val trainings: StateFlow<List<TrainingWithSeries>> = trainingRepository
+        .observeAllTrainingsWithSeries()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val trainingDetail: StateFlow<TrainingWithEnds?> = selectedTrainingId
+    val trainingDetail: StateFlow<TrainingWithSeries?> = selectedTrainingId
         .flatMapLatest { id ->
             Log.d("ArcheryScore_Debug", "flatMapLatest triggered with id: $id")
-            if (id == null) flowOf(null) else trainingRepository.observeTrainingWithEnds(id)
+            if (id == null) flowOf(null) else trainingRepository.observeTrainingWithSeries(id)
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
@@ -42,42 +59,19 @@ class TrainingsViewModel @Inject constructor(
         selectedTrainingId.value = id
     }
 
-    fun createTraining(
+    // Nueva función para crear training con múltiples series
+    fun createTrainingWithSeries(
         archerName: String?,
-        distanceMeters: Int,
-        category: String,
-        targetType: String,
-        arrowsPerEnd: Int,
-        endsCount: Int,
-        weather: WeatherSnapshot?,
-        locationLat: Double?,
-        locationLon: Double?,
-        weatherSource: String?,
-        targetZoneCount: Int = 10,
-        puntajeSystem: String = "X_TO_M"
+        seriesList: List<SeriesFormData>
     ) {
-        Log.d("ArcheryScore_Debug", "createTraining called - archer: $archerName, distance: $distanceMeters, category: $category, target: $targetType, arrows: $arrowsPerEnd, ends: $endsCount, zones: $targetZoneCount, system: $puntajeSystem")
+        Log.d("ArcheryScore_Debug", "createTrainingWithSeries - archer: $archerName, series count: ${seriesList.size}")
         viewModelScope.launch {
             val training = TrainingEntity(
                 createdAt = System.currentTimeMillis(),
-                archerName = archerName,
-                distanceMeters = distanceMeters,
-                category = category,
-                targetType = targetType,
-                arrowsPerEnd = arrowsPerEnd,
-                endsCount = endsCount,
-                windSpeed = weather?.windSpeed,
-                windSpeedUnit = weather?.windSpeedUnit,
-                windDirectionDegrees = weather?.windDirectionDegrees,
-                skyCondition = weather?.skyCondition,
-                locationLat = locationLat,
-                locationLon = locationLon,
-                weatherSource = weatherSource,
-                targetZoneCount = targetZoneCount,
-                puntajeSystem = puntajeSystem
+                archerName = archerName
             )
-            val trainingId = trainingRepository.createTraining(training)
-            Log.d("ArcheryScore_Debug", "Training created with ID: $trainingId")
+            val trainingId = trainingRepository.createTrainingWithSeries(training, seriesList)
+            Log.d("ArcheryScore_Debug", "Training with series created with ID: $trainingId")
             selectedTrainingId.value = trainingId
         }
     }
@@ -90,16 +84,11 @@ class TrainingsViewModel @Inject constructor(
         }
     }
 
-    fun addNewEnd() {
+    fun addNewEndToSeries(seriesId: Long) {
         viewModelScope.launch {
-            val currentTrainingId = selectedTrainingId.value
-            Log.d("ArcheryScore_Debug", "addNewEnd called - trainingId: $currentTrainingId")
-            if (currentTrainingId != null) {
-                trainingRepository.addNewEnd(currentTrainingId)
-                Log.d("ArcheryScore_Debug", "New end added successfully")
-            } else {
-                Log.w("ArcheryScore_Debug", "addNewEnd called but no training selected")
-            }
+            Log.d("ArcheryScore_Debug", "addNewEndToSeries called - seriesId: $seriesId")
+            trainingRepository.addNewEndToSeries(seriesId)
+            Log.d("ArcheryScore_Debug", "New end added to series successfully")
         }
     }
 

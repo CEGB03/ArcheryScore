@@ -29,6 +29,7 @@ class WeatherRepository @Inject constructor() {
                     null
                 } else {
                     WeatherSnapshot(
+                        temperature = weather.temperature,
                         windSpeed = weather.windspeed,
                         windSpeedUnit = response.current_weather_units?.windspeed,
                         windDirectionDegrees = weather.winddirection?.toInt(),
