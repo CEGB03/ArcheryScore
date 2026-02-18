@@ -40,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AlertDialog
@@ -69,6 +70,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -78,6 +80,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -94,17 +97,23 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cegb03.archeryscore.data.local.training.SeriesEntity
 import com.cegb03.archeryscore.data.local.training.TrainingEntity
-import com.cegb03.archeryscore.data.local.training.TrainingWithEnds
+import com.cegb03.archeryscore.data.local.training.TrainingWithSeries
+import com.cegb03.archeryscore.data.local.training.SeriesWithEnds
 import com.cegb03.archeryscore.data.model.WeatherSnapshot
+import com.cegb03.archeryscore.ui.theme.getScoreColor
+import com.cegb03.archeryscore.ui.theme.getScoreTextColor
 import com.cegb03.archeryscore.util.getCurrentLocation
 import com.cegb03.archeryscore.viewmodel.AuthViewModel
+import com.cegb03.archeryscore.viewmodel.SeriesFormData
 import com.cegb03.archeryscore.viewmodel.TrainingsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 @Composable
 fun TrainingsScreen(
@@ -167,24 +176,11 @@ fun TrainingsScreen(
     }
 
     if (showCreateDialog) {
-        CreateTrainingDialog(
+        CreateTrainingWithSeriesDialog(
             isLoggedIn = isLoggedIn,
             onDismiss = { showCreateDialog = false },
-            onCreate = { form ->
-                viewModel.createTraining(
-                    archerName = form.archerName,
-                    distanceMeters = form.distanceMeters,
-                    category = form.category,
-                    targetType = form.targetType,
-                    arrowsPerEnd = form.arrowsPerEnd,
-                    endsCount = form.endsCount,
-                    weather = form.weather,
-                    locationLat = form.locationLat,
-                    locationLon = form.locationLon,
-                    weatherSource = form.weatherSource,
-                    targetZoneCount = form.targetZoneCount,
-                    puntajeSystem = form.puntajeSystem
-                )
+            onCreate = { archerName, seriesList ->
+                viewModel.createTrainingWithSeries(archerName, seriesList)
                 showCreateDialog = false
             },
             onFetchWeather = { lat, lon -> viewModel.fetchWeather(lat, lon) }
@@ -194,7 +190,7 @@ fun TrainingsScreen(
 
 @Composable
 private fun TrainingsList(
-    trainings: List<TrainingEntity>,
+    trainings: List<TrainingWithSeries>,
     onSelect: (Long) -> Unit,
     onAdd: () -> Unit
 ) {
@@ -215,8 +211,8 @@ private fun TrainingsList(
                 contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(trainings) { training ->
-                    TrainingCard(training = training, onClick = { onSelect(training.id) })
+                items(trainings) { trainingWithSeries ->
+                    TrainingCard(trainingWithSeries = trainingWithSeries, onClick = { onSelect(trainingWithSeries.training.id) })
                 }
             }
         }
@@ -257,7 +253,8 @@ private fun GroupTrainingsPlaceholder(onAdd: () -> Unit) {
 }
 
 @Composable
-private fun TrainingCard(training: TrainingEntity, onClick: () -> Unit) {
+private fun TrainingCard(trainingWithSeries: TrainingWithSeries, onClick: () -> Unit) {
+    val training = trainingWithSeries.training
     val date = remember(training.createdAt) {
         val formatter = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
         formatter.format(Date(training.createdAt))
@@ -275,14 +272,24 @@ private fun TrainingCard(training: TrainingEntity, onClick: () -> Unit) {
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = "Fecha: $date", style = MaterialTheme.typography.bodySmall)
-            Text(
-                text = "Distancia: ${training.distanceMeters} m",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Text(
-                text = "Categoria: ${training.category}",
-                style = MaterialTheme.typography.bodySmall
-            )
+            
+            // Mostrar información de series
+            if (trainingWithSeries.series.size == 1) {
+                val firstSeries = trainingWithSeries.series.first().series
+                Text(
+                    text = "Distancia: ${firstSeries.distanceMeters} m",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    text = "Categoria: ${firstSeries.category}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            } else {
+                Text(
+                    text = "${trainingWithSeries.series.size} series",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
     }
 }
@@ -290,18 +297,18 @@ private fun TrainingCard(training: TrainingEntity, onClick: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TrainingDetailScreen(
-    detail: TrainingWithEnds?,
+    detail: TrainingWithSeries?,
     onBack: () -> Unit,
     onConfirmEnd: (Long, String, Int) -> Unit
 ) {
-    Log.d("ArcheryScore_Debug", "TrainingDetailScreen called - detail: ${detail != null}, training: ${detail?.training != null}, ends: ${detail?.ends?.size ?: 0}")
+    Log.d("ArcheryScore_Debug", "TrainingDetailScreen called - detail: ${detail != null}, training: ${detail?.training != null}, series: ${detail?.series?.size ?: 0}")
     val training = detail?.training
-    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
-    var targetSheetPage by rememberSaveable { mutableIntStateOf(-1) } // Página destino para la planilla
+    var selectedMainTabIndex by rememberSaveable { mutableIntStateOf(0) } // 0..N=Series, N+1=Estadísticas
+    var selectedSeriesTabIndex by rememberSaveable { mutableIntStateOf(0) } // 0=Planilla, 1=Estadísticas (dentro de serie)
+    var targetSheetPage by rememberSaveable { mutableIntStateOf(-1) }
 
     var showInfoMenu by remember { mutableStateOf(false) }
 
-    // Manejar el back button del sistema en la planilla
     BackHandler {
         onBack()
     }
@@ -329,29 +336,46 @@ private fun TrainingDetailScreen(
                             onDismissRequest = { showInfoMenu = false },
                             modifier = Modifier.wrapContentHeight()
                         ) {
-                            if (training != null) {
-                                Column(
+                            if (detail != null && detail.series.isNotEmpty()) {
+                                LazyColumn(
                                     modifier = Modifier
                                         .padding(16.dp)
-                                        .width(300.dp),
+                                        .width(300.dp)
+                                        .heightIn(max = 400.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text("Información del entrenamiento", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("Distancia: ${training.distanceMeters} m", style = MaterialTheme.typography.labelSmall)
-                                    Text("Categoría: ${training.category}", style = MaterialTheme.typography.labelSmall)
-                                    Text("Blanco: ${training.targetType}", style = MaterialTheme.typography.labelSmall)
-                                    Text("Flechas por tanda: ${training.arrowsPerEnd}", style = MaterialTheme.typography.labelSmall)
-                                    Text("Tandas: ${training.endsCount}", style = MaterialTheme.typography.labelSmall)
+                                    item {
+                                        Text("Información del entrenamiento", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text("Fecha: ${SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(training?.createdAt ?: 0))}", style = MaterialTheme.typography.labelSmall)
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                    }
                                     
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("Sistema: ${if (training.puntajeSystem == "X_TO_M") "X a M" else "11 a M"} (${training.targetZoneCount} zonas)", style = MaterialTheme.typography.labelSmall)
-                                    
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("Clima:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                    Text("Viento: ${training.windSpeed ?: "-"} ${training.windSpeedUnit ?: ""}", style = MaterialTheme.typography.labelSmall)
-                                    Text("Dirección: ${formatWindDirection(training.windDirectionDegrees)}", style = MaterialTheme.typography.labelSmall)
-                                    Text("Cielo: ${training.skyCondition ?: "-"}", style = MaterialTheme.typography.labelSmall)
+                                    items(detail.series) { seriesWithEnds ->
+                                        val series = seriesWithEnds.series
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                            )
+                                        ) {
+                                            Column(modifier = Modifier.padding(12.dp)) {
+                                                Text("Serie ${series.seriesNumber}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text("Distancia: ${series.distanceMeters} m", style = MaterialTheme.typography.labelSmall)
+                                                Text("Categoría: ${series.category}", style = MaterialTheme.typography.labelSmall)
+                                                Text("Blanco: ${series.targetType}", style = MaterialTheme.typography.labelSmall)
+                                                Text("Flechas x tanda: ${series.arrowsPerEnd}", style = MaterialTheme.typography.labelSmall)
+                                                Text("Tandas: ${series.endsCount}", style = MaterialTheme.typography.labelSmall)
+                                                Text("Sistema: ${if (series.puntajeSystem == "X_TO_M") "X a M" else "11 a M"} (${series.targetZoneCount} zonas)", style = MaterialTheme.typography.labelSmall)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                Text("Temperatura: ${series.temperature?.let { "%.1f°C".format(it) } ?: "-"}", style = MaterialTheme.typography.labelSmall)
+                                                Text("Viento: ${series.windSpeed ?: "-"} ${series.windSpeedUnit ?: ""}", style = MaterialTheme.typography.labelSmall)
+                                                Text("Dirección: ${formatWindDirection(series.windDirectionDegrees)}", style = MaterialTheme.typography.labelSmall)
+                                                Text("Cielo: ${series.skyCondition ?: "-"}", style = MaterialTheme.typography.labelSmall)
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -360,76 +384,105 @@ private fun TrainingDetailScreen(
             )
         }
     ) { innerPadding ->
-        if (training == null || detail == null) {
-            Log.w("ArcheryScore_Debug", "Training or detail is null")
+        if (training == null || detail == null || detail.series.isEmpty()) {
+            Log.w("ArcheryScore_Debug", "Training, detail is null or no series")
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Cargando...")
-            }
-            return@Scaffold
-        }
-
-        // Validar que detail.ends no esté vacío
-        if (detail.ends.isEmpty()) {
-            Log.e("ArcheryScore_Debug", "detail.ends is empty for training ID: ${training.id}")
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("Error: No hay tandas. Por favor, crea un nuevo entrenamiento.")
+                Text(if (detail?.series?.isEmpty() == true) "Error: No hay series." else "Cargando...")
             }
             return@Scaffold
         }
         
-        Log.d("ArcheryScore_Debug", "Rendering tabs for training ${training.id} with ${detail.ends.size} ends")
+        Log.d("ArcheryScore_Debug", "Rendering tabs for training ${training.id} with ${detail.series.size} series")
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            TabRow(selectedTabIndex = selectedTabIndex) {
+            // Pestañas principales: Series + Estadísticas
+            val numSeries = detail.series.size
+            val isGeneralStatsTab = selectedMainTabIndex == numSeries
+            
+            TabRow(selectedTabIndex = selectedMainTabIndex) {
+                // Tabs para cada serie
+                detail.series.forEachIndexed { index, seriesWithEnds ->
+                    Tab(
+                        selected = selectedMainTabIndex == index,
+                        onClick = { 
+                            selectedMainTabIndex = index
+                            selectedSeriesTabIndex = 0 // Reset a Planilla
+                        },
+                        text = { Text("Serie ${index + 1}") }
+                    )
+                }
+                // Tab para Estadísticas generales
                 Tab(
-                    selected = selectedTabIndex == 0,
-                    onClick = { selectedTabIndex = 0 },
-                    text = { Text("Planilla") }
-                )
-                Tab(
-                    selected = selectedTabIndex == 1,
-                    onClick = { selectedTabIndex = 1 },
-                    text = { Text("Estadisticas") }
+                    selected = isGeneralStatsTab,
+                    onClick = { selectedMainTabIndex = numSeries },
+                    text = { Text("Estadísticas") }
                 )
             }
 
-            when (selectedTabIndex) {
-                0 -> {
-                    Log.d("ArcheryScore_Debug", "Rendering TrainingSheetTab")
-                    TrainingSheetTab(
-                        training = training,
-                        detail = detail,
-                        targetZoneCount = training.targetZoneCount,
-                        puntajeSystem = training.puntajeSystem,
-                        onConfirmEnd = onConfirmEnd,
-                        onSwitchToStats = { selectedTabIndex = 1 },
-                        targetPage = targetSheetPage,
-                        onPageChanged = { targetSheetPage = -1 } // Resetear después de usarlo
+            // Si estamos en la pestaña de estadísticas generales
+            if (isGeneralStatsTab) {
+                GeneralStatsTab(
+                    detail = detail,
+                    onSwitchToSeries = { seriesIndex ->
+                        selectedMainTabIndex = seriesIndex
+                        selectedSeriesTabIndex = 0
+                    }
+                )
+            } else {
+                // Estamos en una serie específica
+                val currentSeries = detail.series.getOrNull(selectedMainTabIndex)
+                
+                if (currentSeries == null) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text("Serie no encontrada")
+                    }
+                    return@Column
+                }
+
+                // Pestañas dentro de la serie: Planilla + Estadísticas
+                TabRow(selectedTabIndex = selectedSeriesTabIndex) {
+                    Tab(
+                        selected = selectedSeriesTabIndex == 0,
+                        onClick = { selectedSeriesTabIndex = 0 },
+                        text = { Text("Planilla") }
+                    )
+                    Tab(
+                        selected = selectedSeriesTabIndex == 1,
+                        onClick = { selectedSeriesTabIndex = 1 },
+                        text = { Text("Estadísticas") }
                     )
                 }
-                1 -> {
-                    Log.d("ArcheryScore_Debug", "Rendering TrainingStatsTab")
-                    TrainingStatsTab(
-                        detail = detail,
-                        onSwitchToPlanilla = { 
-                            targetSheetPage = detail.ends.size - 1 // Ir a la última tanda
-                            selectedTabIndex = 0 
-                        }
-                    )
+
+                when (selectedSeriesTabIndex) {
+                    0 -> {
+                        Log.d("ArcheryScore_Debug", "Rendering SeriesSheetTab for series ${currentSeries.series.id}")
+                        SeriesSheetTab(
+                            seriesWithEnds = currentSeries,
+                            onConfirmEnd = onConfirmEnd,
+                            onSwitchToStats = { selectedSeriesTabIndex = 1 },
+                            targetPage = targetSheetPage,
+                            onPageChanged = { targetSheetPage = -1 }
+                        )
+                    }
+                    1 -> {
+                        Log.d("ArcheryScore_Debug", "Rendering SeriesStatsTab for series ${currentSeries.series.id}")
+                        SeriesStatsTab(
+                            seriesWithEnds = currentSeries,
+                            onSwitchToPlanilla = { 
+                                targetSheetPage = currentSeries.ends.size - 1
+                                selectedSeriesTabIndex = 0 
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -437,21 +490,20 @@ private fun TrainingDetailScreen(
 }
 
 @Composable
-private fun TrainingSheetTab(
-    training: TrainingEntity,
-    detail: TrainingWithEnds,
-    targetZoneCount: Int,
-    puntajeSystem: String,
+private fun SeriesSheetTab(
+    seriesWithEnds: SeriesWithEnds,
     onConfirmEnd: (Long, String, Int) -> Unit,
     onSwitchToStats: () -> Unit = {},
     targetPage: Int = -1,
     onPageChanged: () -> Unit = {}
 ) {
-    Log.d("ArcheryScore_Debug", "TrainingSheetTab - training: ${training.id}, ends: ${detail.ends.size}, zones: $targetZoneCount, system: $puntajeSystem")
+    val series = seriesWithEnds.series
+    val ends = seriesWithEnds.ends
     
-    // Validar que detail.ends no esté vacío
-    if (detail.ends.isEmpty()) {
-        Log.e("ArcheryScore_Debug", "detail.ends is empty!")
+    Log.d("ArcheryScore_Debug", "SeriesSheetTab - series: ${series.id}, ends: ${ends.size}, zones: ${series.targetZoneCount}, system: ${series.puntajeSystem}")
+    
+    if (ends.isEmpty()) {
+        Log.e("ArcheryScore_Debug", "ends is empty!")
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
@@ -461,21 +513,12 @@ private fun TrainingSheetTab(
         return
     }
 
-    // Asegurar valores válidos
-    val safeTargetZoneCount = if (targetZoneCount in listOf(6, 10)) targetZoneCount else 10
-    val safePuntajeSystem = if (puntajeSystem in listOf("X_TO_M", "11_TO_M")) puntajeSystem else "X_TO_M"
-    
-    Log.d("ArcheryScore_Debug", "Safe values - zones: $safeTargetZoneCount, system: $safePuntajeSystem")
-    
-    // Usar el número actual de tandas para pageCount
-    val totalEnds = detail.ends.size
-    Log.d("ArcheryScore_Debug", "Creating pagerState with totalEnds: $totalEnds")
+    val totalEnds = ends.size
     val pagerState = rememberPagerState(
         pageCount = { totalEnds },
         initialPage = if (targetPage >= 0 && targetPage < totalEnds) targetPage else 0
     )
 
-    // Navegar a targetPage si está configurado
     LaunchedEffect(targetPage) {
         if (targetPage >= 0 && targetPage < totalEnds) {
             pagerState.scrollToPage(targetPage)
@@ -495,8 +538,8 @@ private fun TrainingSheetTab(
                 .fillMaxWidth()
                 .weight(1f)
         ) { pageIndex ->
-            Log.d("ArcheryScore_Debug", "Rendering page $pageIndex of ${detail.ends.size}")
-            val end = detail.ends.getOrNull(pageIndex)
+            Log.d("ArcheryScore_Debug", "Rendering page $pageIndex of ${ends.size}")
+            val end = ends.getOrNull(pageIndex)
             
             if (end == null) {
                 Log.e("ArcheryScore_Debug", "End is null at pageIndex $pageIndex")
@@ -517,8 +560,8 @@ private fun TrainingSheetTab(
             }
             
             val isConfirmed = end.confirmedAt != null
-            val validScores = remember(safeTargetZoneCount, safePuntajeSystem) {
-                getValidScores(safeTargetZoneCount, safePuntajeSystem)
+            val validScores = remember(series.targetZoneCount, series.puntajeSystem) {
+                getValidScores(series.targetZoneCount, series.puntajeSystem)
             }
             
             // Estado para drag & drop
@@ -582,7 +625,7 @@ private fun TrainingSheetTab(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = if (isConfirmed) "✓ Confirmada" else "${existingScores.size}/${training.arrowsPerEnd} flechas",
+                    text = if (isConfirmed) "✓ Confirmada" else "${existingScores.size}/${series.arrowsPerEnd} flechas",
                     style = MaterialTheme.typography.bodyMedium,
                     color = if (isConfirmed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -612,7 +655,7 @@ private fun TrainingSheetTab(
                             .pointerInput(Unit) {
                                 detectTapGestures(
                                     onPress = { offset ->
-                                        if (draggedScore != null && !isConfirmed && existingScores.size < training.arrowsPerEnd) {
+                                        if (draggedScore != null && !isConfirmed && existingScores.size < series.arrowsPerEnd) {
                                             existingScores.add(draggedScore!!)
                                             draggedScore = null
                                             dragOffset = Offset.Zero
@@ -731,6 +774,10 @@ private fun TrainingSheetTab(
                     ) {
                         items(validScores.size) { index ->
                             val score = validScores[index]
+                            val scoreColor = getScoreColor(score)
+                            val scoreTextColor = getScoreTextColor(score)
+                            val isDisabled = existingScores.size >= series.arrowsPerEnd
+                            
                             Box(
                                 modifier = Modifier
                                     .aspectRatio(1f)
@@ -743,17 +790,28 @@ private fun TrainingSheetTab(
                                             scaleY = 1.2f
                                         }
                                     }
+                                    .then(
+                                        if (score == "M") {
+                                            Modifier.border(
+                                                width = 2.dp,
+                                                color = if (isDisabled) Color.Gray else Color.White,
+                                                shape = MaterialTheme.shapes.medium
+                                            )
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
                                     .background(
-                                        color = if (existingScores.size >= training.arrowsPerEnd)
+                                        color = if (isDisabled)
                                             MaterialTheme.colorScheme.surfaceVariant
                                         else
-                                            MaterialTheme.colorScheme.primary,
+                                            scoreColor,
                                         shape = MaterialTheme.shapes.medium
                                     )
                                     .pointerInput(score) {
                                         detectDragGestures(
                                             onDragStart = {
-                                                if (existingScores.size < training.arrowsPerEnd) {
+                                                if (existingScores.size < series.arrowsPerEnd) {
                                                     draggedScore = score
                                                     dragOffset = Offset.Zero
                                                 }
@@ -771,7 +829,7 @@ private fun TrainingSheetTab(
                                                         val finalPos = dragOffset
                                                         if (finalPos.x >= dropPos.x && finalPos.x <= dropPos.x + dropSize.width &&
                                                             finalPos.y >= dropPos.y && finalPos.y <= dropPos.y + dropSize.height) {
-                                                            if (existingScores.size < training.arrowsPerEnd) {
+                                                            if (existingScores.size < series.arrowsPerEnd) {
                                                                 existingScores.add(score)
                                                             }
                                                         }
@@ -786,7 +844,7 @@ private fun TrainingSheetTab(
                                             }
                                         )
                                     }
-                                    .clickable(enabled = existingScores.size < training.arrowsPerEnd) {
+                                    .clickable(enabled = existingScores.size < series.arrowsPerEnd) {
                                         existingScores.add(score)
                                     },
                                 contentAlignment = Alignment.Center
@@ -795,10 +853,10 @@ private fun TrainingSheetTab(
                                     text = score,
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (existingScores.size >= training.arrowsPerEnd)
+                                    color = if (isDisabled)
                                         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                     else
-                                        MaterialTheme.colorScheme.onPrimary
+                                        scoreTextColor
                                 )
                             }
                         }
@@ -823,7 +881,7 @@ private fun TrainingSheetTab(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = existingScores.size == training.arrowsPerEnd && !isConfirmed
+                    enabled = existingScores.size == series.arrowsPerEnd && !isConfirmed
                 ) {
                     Text(if (isConfirmed) "Confirmada" else "Confirmar tanda")
                 }
@@ -845,7 +903,7 @@ private fun TrainingSheetTab(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                repeat(detail.ends.size) { index ->
+                repeat(ends.size) { index ->
                     Box(
                         modifier = Modifier
                             .width(8.dp)
@@ -862,19 +920,333 @@ private fun TrainingSheetTab(
                     )
                 }
             }
-            Text("Tanda ${pagerState.currentPage + 1} de ${detail.ends.size}")
+            Text("Tanda ${pagerState.currentPage + 1} de ${ends.size}")
+        }
+    }
+}
+
+@Composable
+private fun SeriesStatsTab(
+    seriesWithEnds: SeriesWithEnds,
+    onSwitchToPlanilla: () -> Unit = {}
+) {
+    var swipeOffsetX by remember { mutableStateOf(0f) }
+    var swipeOffsetY by remember { mutableStateOf(0f) }
+    var isHorizontalSwipe by remember { mutableStateOf(false) }
+
+    val ends = seriesWithEnds.ends
+    val series = seriesWithEnds.series
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = {
+                        swipeOffsetX = 0f
+                        swipeOffsetY = 0f
+                        isHorizontalSwipe = false
+                    },
+                    onDragEnd = {
+                        if (isHorizontalSwipe && swipeOffsetX > 200f) {
+                            Log.d("ArcheryScore_Debug", "Detectado swipe hacia la derecha en Estadísticas de serie, volviendo a Planilla")
+                            onSwitchToPlanilla()
+                        }
+                        swipeOffsetX = 0f
+                        swipeOffsetY = 0f
+                        isHorizontalSwipe = false
+                    },
+                    onDrag = { change, dragAmount ->
+                        swipeOffsetX += dragAmount.x
+                        swipeOffsetY += abs(dragAmount.y)
+                        if (abs(swipeOffsetX) > 30f || swipeOffsetY > 30f) {
+                            if (abs(swipeOffsetX) > swipeOffsetY * 1.5f) {
+                                isHorizontalSwipe = true
+                                change.consume()
+                            }
+                        }
+                    }
+                )
+            }
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Detalles de cada tanda
+            item {
+                Text("Estadísticas por tanda", style = MaterialTheme.typography.titleMedium)
+            }
+
+            items(ends) { end ->
+                if (end.confirmedAt != null) {
+                    val endScores = parseScores(end.scoresText.orEmpty())
+                    if (endScores.isNotEmpty()) {
+                        val endTotal = endScores.sumOf { it.score }
+                        val endAverage = endTotal.toDouble() / endScores.size
+                        val endXCount = endScores.count { it.isX }
+                        val endTenCount = endScores.count { it.score == 10 && !it.isX }
+                        val endNineCount = endScores.count { it.score == 9 }
+                        val endMissCount = endScores.count { it.isMiss }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Tanda ${end.endNumber}", style = MaterialTheme.typography.titleSmall)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Total: $endTotal")
+                                    Text("Promedio: ${"%.2f".format(endAverage)}")
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                    Text("X: $endXCount")
+                                    Text("10: $endTenCount")
+                                    Text("9: $endNineCount")
+                                    Text("M: $endMissCount")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Separador
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Sumatoria de la serie
+            item {
+                val parsedScores = ends.flatMap { parseScores(it.scoresText.orEmpty()) }
+                val totalArrows = parsedScores.size
+                val totalScore = parsedScores.sumOf { it.score }
+                val average = if (totalArrows == 0) 0.0 else totalScore.toDouble() / totalArrows
+                val xCount = parsedScores.count { it.isX }
+                val tenCount = parsedScores.count { it.score == 10 && !it.isX }
+                val nineCount = parsedScores.count { it.score == 9 }
+                val missCount = parsedScores.count { it.isMiss }
+                val confirmedEnds = ends.count { it.confirmedAt != null }
+
+                Text("Sumatoria de la serie", style = MaterialTheme.typography.titleMedium)
+            }
+
+            item {
+                val parsedScores = ends.flatMap { parseScores(it.scoresText.orEmpty()) }
+                val totalArrows = parsedScores.size
+                val totalScore = parsedScores.sumOf { it.score }
+                val average = if (totalArrows == 0) 0.0 else totalScore.toDouble() / totalArrows
+                val xCount = parsedScores.count { it.isX }
+                val tenCount = parsedScores.count { it.score == 10 && !it.isX }
+                val nineCount = parsedScores.count { it.score == 9 }
+                val missCount = parsedScores.count { it.isMiss }
+                val confirmedEnds = ends.count { it.confirmedAt != null }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Serie: ${series.distanceMeters}m - ${series.category}")
+                            Text("Tandas: $confirmedEnds/${series.endsCount}")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total flechas: $totalArrows")
+                            Text("Puntuación: $totalScore")
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Promedio: ${"%.2f".format(average)}")
+                            Text("X: $xCount")
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            Text("10: $tenCount")
+                            Text("9: $nineCount")
+                            Text("M: $missCount")
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GeneralStatsTab(
+    detail: TrainingWithSeries,
+    onSwitchToSeries: (Int) -> Unit = {}
+) {
+    var swipeOffsetX by remember { mutableStateOf(0f) }
+    var swipeOffsetY by remember { mutableStateOf(0f) }
+    var isHorizontalSwipe by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = {
+                        swipeOffsetX = 0f
+                        swipeOffsetY = 0f
+                        isHorizontalSwipe = false
+                    },
+                    onDragEnd = {
+                        // Si hay swipe hacia la derecha, ir a la primera serie
+                        if (isHorizontalSwipe && swipeOffsetX > 200f) {
+                            Log.d("ArcheryScore_Debug", "Detectado swipe hacia la derecha desde Estadísticas, yendo a Serie 1")
+                            onSwitchToSeries(0)
+                        }
+                        swipeOffsetX = 0f
+                        swipeOffsetY = 0f
+                        isHorizontalSwipe = false
+                    },
+                    onDrag = { change, dragAmount ->
+                        swipeOffsetX += dragAmount.x
+                        swipeOffsetY += abs(dragAmount.y)
+                        if (abs(swipeOffsetX) > 30f || swipeOffsetY > 30f) {
+                            if (abs(swipeOffsetX) > swipeOffsetY * 1.5f) {
+                                isHorizontalSwipe = true
+                                change.consume()
+                            }
+                        }
+                    }
+                )
+            }
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                Text("Estadísticas por serie", style = MaterialTheme.typography.titleMedium)
+            }
+
+            // Estadísticas de cada serie
+            items(detail.series) { seriesWithEnds ->
+                val series = seriesWithEnds.series
+                val ends = seriesWithEnds.ends
+                val parsedScores = ends.flatMap { parseScores(it.scoresText.orEmpty()) }
+                val totalArrows = parsedScores.size
+                val totalScore = parsedScores.sumOf { it.score }
+                val average = if (totalArrows == 0) 0.0 else totalScore.toDouble() / totalArrows
+                val xCount = parsedScores.count { it.isX }
+                val tenCount = parsedScores.count { it.score == 10 && !it.isX }
+                val nineCount = parsedScores.count { it.score == 9 }
+                val missCount = parsedScores.count { it.isMiss }
+                val confirmedEnds = ends.count { it.confirmedAt != null }
+
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSwitchToSeries(detail.series.indexOf(seriesWithEnds)) },
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Serie ${series.seriesNumber} - ${series.distanceMeters}m", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Text("${series.category}", style = MaterialTheme.typography.labelSmall)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("${series.targetType}", style = MaterialTheme.typography.labelSmall)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Tandas: $confirmedEnds/${series.endsCount}")
+                            Text("Flechas: $totalArrows")
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total: $totalScore")
+                            Text("Promedio: ${"%.2f".format(average)}")
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            Text("X: $xCount")
+                            Text("10: $tenCount")
+                            Text("9: $nineCount")
+                            Text("M: $missCount")
+                        }
+                    }
+                }
+            }
+
+            // Separador
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Estadísticas generales totales
+            item {
+                Text("Estadísticas generales", style = MaterialTheme.typography.titleMedium)
+            }
+
+            item {
+                val allEnds = detail.series.flatMap { it.ends }
+                val parsedScores = allEnds.flatMap { parseScores(it.scoresText.orEmpty()) }
+                val totalArrows = parsedScores.size
+                val totalScore = parsedScores.sumOf { it.score }
+                val average = if (totalArrows == 0) 0.0 else totalScore.toDouble() / totalArrows
+                val xCount = parsedScores.count { it.isX }
+                val tenCount = parsedScores.count { it.score == 10 && !it.isX }
+                val nineCount = parsedScores.count { it.score == 9 }
+                val missCount = parsedScores.count { it.isMiss }
+                val totalConfirmedEnds = allEnds.count { it.confirmedAt != null }
+                val totalEndsRequired = detail.series.sumOf { it.series.endsCount }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Series: ${detail.series.size}")
+                            Text("Tandas: $totalConfirmedEnds/$totalEndsRequired")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Total flechas: $totalArrows")
+                            Text("Puntuación: $totalScore")
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Promedio general: ${"%.2f".format(average)}")
+                            Text("X: $xCount")
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            Text("10: $tenCount")
+                            Text("9: $nineCount")
+                            Text("M: $missCount")
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
 private fun TrainingStatsTab(
-    detail: TrainingWithEnds,
+    detail: TrainingWithSeries,
     onSwitchToPlanilla: () -> Unit = {}
 ) {
     var swipeOffsetX by remember { mutableStateOf(0f) }
     var swipeOffsetY by remember { mutableStateOf(0f) }
     var isHorizontalSwipe by remember { mutableStateOf(false) }
+
+    // Obtener todos los ends de todas las series
+    val allEnds = remember(detail) {
+        detail.series.flatMap { it.ends }
+    }
 
     Box(
         modifier = Modifier
@@ -916,58 +1288,117 @@ private fun TrainingStatsTab(
             contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Estadísticas por tanda
-            item {
-                Text("Por tanda", style = MaterialTheme.typography.titleMedium)
-            }
+            // Si hay múltiples series, mostrar estadísticas por serie
+            if (detail.series.size > 1) {
+                detail.series.forEachIndexed { seriesIndex, seriesWithEnds ->
+                    item {
+                        Text(
+                            "Serie ${seriesIndex + 1} - ${seriesWithEnds.series.distanceMeters}m",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
 
-            items(detail.ends) { end ->
-                if (end.confirmedAt != null) {
-                    val endScores = parseScores(end.scoresText.orEmpty())
-                    if (endScores.isNotEmpty()) {
-                        val endTotal = endScores.sumOf { it.score }
-                        val endAverage = endTotal.toDouble() / endScores.size
-                        val endXCount = endScores.count { it.isX }
-                        val endTenCount = endScores.count { it.score == 10 && !it.isX }
-                        val endNineCount = endScores.count { it.score == 9 }
-                        val endMissCount = endScores.count { it.isMiss }
+                    item {
+                        val seriesEnds = seriesWithEnds.ends
+                        val parsedScores = seriesEnds.flatMap { parseScores(it.scoresText.orEmpty()) }
+                        val totalArrows = parsedScores.size
+                        val totalScore = parsedScores.sumOf { it.score }
+                        val average = if (totalArrows == 0) 0.0 else totalScore.toDouble() / totalArrows
+                        val xCount = parsedScores.count { it.isX }
+                        val tenCount = parsedScores.count { it.score == 10 && !it.isX }
+                        val nineCount = parsedScores.count { it.score == 9 }
+                        val missCount = parsedScores.count { it.isMiss }
+                        val confirmedEnds = seriesEnds.count { it.confirmedAt != null }
 
                         Card(
                             modifier = Modifier.fillMaxWidth(),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            )
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
-                                Text("Tanda ${end.endNumber}", style = MaterialTheme.typography.titleSmall)
-                                Spacer(modifier = Modifier.height(8.dp))
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Total: $endTotal")
-                                    Text("Promedio: ${"%.2f".format(endAverage)}")
+                                    Text("Tandas: $confirmedEnds")
+                                    Text("Flechas: $totalArrows")
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Total: $totalScore")
+                                    Text("Promedio: ${"%.2f".format(average)}")
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                    Text("X: $endXCount")
-                                    Text("10: $endTenCount")
-                                    Text("9: $endNineCount")
-                                    Text("M: $endMissCount")
+                                    Text("X: $xCount")
+                                    Text("10: $tenCount")
+                                    Text("9: $nineCount")
+                                    Text("M: $missCount")
+                                }
+                            }
+                        }
+                    }
+
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                }
+
+                item {
+                    Text("Resumen general", style = MaterialTheme.typography.titleMedium)
+                }
+            } else {
+                // Una sola serie: mostrar estadísticas por tanda
+                item {
+                    Text("Por tanda", style = MaterialTheme.typography.titleMedium)
+                }
+
+                items(allEnds) { end ->
+                    if (end.confirmedAt != null) {
+                        val endScores = parseScores(end.scoresText.orEmpty())
+                        if (endScores.isNotEmpty()) {
+                            val endTotal = endScores.sumOf { it.score }
+                            val endAverage = endTotal.toDouble() / endScores.size
+                            val endXCount = endScores.count { it.isX }
+                            val endTenCount = endScores.count { it.score == 10 && !it.isX }
+                            val endNineCount = endScores.count { it.score == 9 }
+                            val endMissCount = endScores.count { it.isMiss }
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("Tanda ${end.endNumber}", style = MaterialTheme.typography.titleSmall)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text("Total: $endTotal")
+                                        Text("Promedio: ${"%.2f".format(endAverage)}")
+                                    }
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                        Text("X: $endXCount")
+                                        Text("10: $endTenCount")
+                                        Text("9: $endNineCount")
+                                        Text("M: $endMissCount")
+                                    }
                                 }
                             }
                         }
                     }
                 }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                item {
+                    Text("Estadísticas generales", style = MaterialTheme.typography.titleMedium)
+                }
             }
 
-            // Separador visual
+            // Estadísticas generales (para todas las series)
             item {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // Estadísticas generales
-            item {
-                Text("Estadísticas generales", style = MaterialTheme.typography.titleMedium)
-            }
-
-            item {
-                val parsedScores = detail.ends.flatMap { parseScores(it.scoresText.orEmpty()) }
+                val parsedScores = allEnds.flatMap { parseScores(it.scoresText.orEmpty()) }
                 val totalArrows = parsedScores.size
                 val totalScore = parsedScores.sumOf { it.score }
                 val average = if (totalArrows == 0) 0.0 else totalScore.toDouble() / totalArrows
@@ -975,7 +1406,7 @@ private fun TrainingStatsTab(
                 val tenCount = parsedScores.count { it.score == 10 && !it.isX }
                 val nineCount = parsedScores.count { it.score == 9 }
                 val missCount = parsedScores.count { it.isMiss }
-                val confirmedEnds = detail.ends.count { it.confirmedAt != null }
+                val confirmedEnds = allEnds.count { it.confirmedAt != null }
 
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -1099,56 +1530,35 @@ private fun validateScoreInput(input: String, zoneCount: Int, puntajeSystem: Str
     return Pair(true, null)
 }
 
-private data class TrainingFormData(
-    val archerName: String?,
-    val distanceMeters: Int,
-    val category: String,
-    val targetType: String,
-    val arrowsPerEnd: Int,
-    val endsCount: Int,
-    val weather: WeatherSnapshot?,
-    val locationLat: Double?,
-    val locationLon: Double?,
-    val weatherSource: String?,
-    val targetZoneCount: Int = 10,
-    val puntajeSystem: String = "X_TO_M"
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CreateTrainingDialog(
+private fun CreateTrainingWithSeriesDialog(
     isLoggedIn: Boolean,
     onDismiss: () -> Unit,
-    onCreate: (TrainingFormData) -> Unit,
+    onCreate: (String?, List<SeriesFormData>) -> Unit,
     onFetchWeather: suspend (Double, Double) -> WeatherSnapshot?
 ) {
     val context = LocalContext.current
 
     var archerName by remember { mutableStateOf("") }
-    var distanceText by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
-    var targetType by remember { mutableStateOf("") }
-    var arrowsPerEndText by remember { mutableStateOf("6") }
-    var endsCountText by remember { mutableStateOf("6") }
-
-    var windSpeedText by remember { mutableStateOf("") }
-    var windDirectionText by remember { mutableStateOf("") }
-    var windUnit by remember { mutableStateOf("") }
-    var skyCondition by remember { mutableStateOf("") }
-
-    var targetZoneCount by remember { mutableStateOf("10") }
-    var puntajeSystem by remember { mutableStateOf("X_TO_M") }
-
-    var weatherSnapshot by remember { mutableStateOf<WeatherSnapshot?>(null) }
-    var locationLat by remember { mutableStateOf<Double?>(null) }
-    var locationLon by remember { mutableStateOf<Double?>(null) }
-
-    var showCategoryMenu by remember { mutableStateOf(false) }
-    var showTargetMenu by remember { mutableStateOf(false) }
-    var showWindUnitMenu by remember { mutableStateOf(false) }
-    var showSkyMenu by remember { mutableStateOf(false) }
-    var showZoneCountMenu by remember { mutableStateOf(false) }
-    var showPuntajeSystemMenu by remember { mutableStateOf(false) }
+    var seriesList by remember {
+        mutableStateOf(listOf(
+            SeriesFormState(
+                distanceText = "",
+                category = "",
+                targetType = "",
+                arrowsPerEndText = "6",
+                endsCountText = "6",
+                targetZoneCount = "10",
+                puntajeSystem = "X_TO_M",
+                temperatureText = "",
+                windSpeedText = "",
+                windDirectionText = "",
+                windUnit = "",
+                skyCondition = ""
+            )
+        ))
+    }
 
     var validationError by remember { mutableStateOf<String?>(null) }
 
@@ -1167,89 +1577,90 @@ private fun CreateTrainingDialog(
         permissionGranted.value = granted
     }
 
-    LaunchedEffect(permissionGranted.value) {
-        if (permissionGranted.value) {
-            val location = getCurrentLocation(context)
-            if (location != null) {
-                locationLat = location.latitude
-                locationLon = location.longitude
-                weatherSnapshot = onFetchWeather(location.latitude, location.longitude)
-                if (weatherSnapshot != null) {
-                    windSpeedText = weatherSnapshot?.windSpeed?.toString().orEmpty()
-                    windDirectionText = weatherSnapshot?.windDirectionDegrees?.toString().orEmpty()
-                    windUnit = weatherSnapshot?.windSpeedUnit.orEmpty()
-                    skyCondition = weatherSnapshot?.skyCondition.orEmpty()
-                }
-            }
+    var locationLat by remember { mutableStateOf<Double?>(null) }
+    var locationLon by remember { mutableStateOf<Double?>(null) }
+
+    fun validateAndCreate() {
+        if (!isLoggedIn && archerName.isBlank()) {
+            validationError = "Nombre obligatorio"
+            return
         }
+
+        if (seriesList.isEmpty()) {
+            validationError = "Debe agregar al menos una serie"
+            return
+        }
+
+        val seriesDataList = mutableListOf<SeriesFormData>()
+
+        seriesList.forEachIndexed { index, series ->
+            val distance = series.distanceText.toIntOrNull()
+            val arrowsPerEnd = series.arrowsPerEndText.toIntOrNull()
+            val endsCount = series.endsCountText.toIntOrNull()
+            val temperature = series.temperatureText.toDoubleOrNull()
+            val windSpeed = series.windSpeedText.toDoubleOrNull()
+            val windDirection = series.windDirectionText.toIntOrNull()
+
+            if (distance == null || distance <= 0) {
+                validationError = "Serie ${index + 1}: Distancia invalida"
+                return
+            }
+            if (series.category.isBlank()) {
+                validationError = "Serie ${index + 1}: Categoria obligatoria"
+                return
+            }
+            if (series.targetType.isBlank()) {
+                validationError = "Serie ${index + 1}: Tipo de blanco obligatorio"
+                return
+            }
+            if (arrowsPerEnd == null || arrowsPerEnd <= 0) {
+                validationError = "Serie ${index + 1}: Flechas por tanda invalido"
+                return
+            }
+            if (endsCount == null || endsCount <= 0) {
+                validationError = "Serie ${index + 1}: Cantidad de tandas invalida"
+                return
+            }
+            if (windSpeed == null || windDirection == null || series.skyCondition.isBlank()) {
+                validationError = "Serie ${index + 1}: Completa los datos de clima"
+                return
+            }
+
+            val weather = WeatherSnapshot(
+                temperature = temperature,
+                windSpeed = windSpeed,
+                windSpeedUnit = series.windUnit.ifBlank { null },
+                windDirectionDegrees = windDirection,
+                skyCondition = series.skyCondition
+            )
+
+            val weatherSource = "manual" // TODO: implement auto-fetch per series
+
+            seriesDataList.add(
+                SeriesFormData(
+                    distanceMeters = distance,
+                    category = series.category,
+                    targetType = series.targetType,
+                    arrowsPerEnd = arrowsPerEnd,
+                    endsCount = endsCount,
+                    targetZoneCount = series.targetZoneCount.toIntOrNull() ?: 10,
+                    puntajeSystem = series.puntajeSystem,
+                    temperature = temperature,
+                    weather = weather,
+                    locationLat = locationLat,
+                    locationLon = locationLon,
+                    weatherSource = weatherSource
+                )
+            )
+        }
+
+        onCreate(if (isLoggedIn) null else archerName, seriesDataList)
     }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = {
-                val distance = distanceText.toIntOrNull()
-                val arrowsPerEnd = arrowsPerEndText.toIntOrNull()
-                val endsCount = endsCountText.toIntOrNull()
-
-                if (!isLoggedIn && archerName.isBlank()) {
-                    validationError = "Nombre obligatorio"
-                    return@TextButton
-                }
-                if (distance == null || distance <= 0) {
-                    validationError = "Distancia invalida"
-                    return@TextButton
-                }
-                if (category.isBlank()) {
-                    validationError = "Categoria obligatoria"
-                    return@TextButton
-                }
-                if (targetType.isBlank()) {
-                    validationError = "Tipo de blanco obligatorio"
-                    return@TextButton
-                }
-                if (arrowsPerEnd == null || arrowsPerEnd <= 0) {
-                    validationError = "Flechas por tanda invalido"
-                    return@TextButton
-                }
-                if (endsCount == null || endsCount <= 0) {
-                    validationError = "Cantidad de tandas invalida"
-                    return@TextButton
-                }
-
-                val windSpeed = windSpeedText.toDoubleOrNull()
-                val windDirection = windDirectionText.toIntOrNull()
-                if (windSpeed == null || windDirection == null || skyCondition.isBlank()) {
-                    validationError = "Completa los datos de clima"
-                    return@TextButton
-                }
-
-                val weather = WeatherSnapshot(
-                    windSpeed = windSpeed,
-                    windSpeedUnit = windUnit.ifBlank { null },
-                    windDirectionDegrees = windDirection,
-                    skyCondition = skyCondition
-                )
-
-                val weatherSource = if (weatherSnapshot != null) "forecast" else "manual"
-
-                onCreate(
-                    TrainingFormData(
-                        archerName = if (isLoggedIn) null else archerName,
-                        distanceMeters = distance,
-                        category = category,
-                        targetType = targetType,
-                        arrowsPerEnd = arrowsPerEnd,
-                        endsCount = endsCount,
-                        weather = weather,
-                        locationLat = locationLat,
-                        locationLon = locationLon,
-                        weatherSource = weatherSource,
-                        targetZoneCount = targetZoneCount.toIntOrNull() ?: 10,
-                        puntajeSystem = puntajeSystem
-                    )
-                )
-            }) {
+            TextButton(onClick = { validateAndCreate() }) {
                 Text("Crear")
             }
         },
@@ -1258,170 +1669,17 @@ private fun CreateTrainingDialog(
         },
         title = { Text("Nuevo entrenamiento") },
         text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.heightIn(max = 500.dp)
+            ) {
                 if (!isLoggedIn) {
                     item {
                         OutlinedTextField(
                             value = archerName,
                             onValueChange = { archerName = it },
-                            label = { Text("Nombre") },
+                            label = { Text("Nombre del arquero") },
                             modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-
-                item {
-                    OutlinedTextField(
-                        value = distanceText,
-                        onValueChange = { distanceText = it },
-                        label = { Text("Distancia (m)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                item {
-                    ExposedDropdownMenuBox(
-                        expanded = showCategoryMenu,
-                        onExpandedChange = { showCategoryMenu = !showCategoryMenu }
-                    ) {
-                        OutlinedTextField(
-                            value = category,
-                            onValueChange = { category = it },
-                            label = { Text("Categoria") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showCategoryMenu) }
-                        )
-                        ExposedDropdownMenu(
-                            expanded = showCategoryMenu,
-                            onDismissRequest = { showCategoryMenu = false }
-                        ) {
-                            categoryOptions().forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
-                                    onClick = {
-                                        category = option
-                                        showCategoryMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    ExposedDropdownMenuBox(
-                        expanded = showTargetMenu,
-                        onExpandedChange = { showTargetMenu = !showTargetMenu }
-                    ) {
-                        OutlinedTextField(
-                            value = targetType,
-                            onValueChange = { targetType = it },
-                            label = { Text("Tipo de blanco") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showTargetMenu) }
-                        )
-                        ExposedDropdownMenu(
-                            expanded = showTargetMenu,
-                            onDismissRequest = { showTargetMenu = false }
-                        ) {
-                            targetOptions().forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
-                                    onClick = {
-                                        targetType = option
-                                        showTargetMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    ExposedDropdownMenuBox(
-                        expanded = showZoneCountMenu,
-                        onExpandedChange = { showZoneCountMenu = !showZoneCountMenu }
-                    ) {
-                        OutlinedTextField(
-                            value = targetZoneCount,
-                            onValueChange = { targetZoneCount = it },
-                            label = { Text("Zonas del blanco") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showZoneCountMenu) }
-                        )
-                        ExposedDropdownMenu(
-                            expanded = showZoneCountMenu,
-                            onDismissRequest = { showZoneCountMenu = false }
-                        ) {
-                            listOf("6", "10").forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
-                                    onClick = {
-                                        targetZoneCount = option
-                                        showZoneCountMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    ExposedDropdownMenuBox(
-                        expanded = showPuntajeSystemMenu,
-                        onExpandedChange = { showPuntajeSystemMenu = !showPuntajeSystemMenu }
-                    ) {
-                        OutlinedTextField(
-                            value = if (puntajeSystem == "X_TO_M") "X a M" else "11 a M",
-                            onValueChange = { },
-                            label = { Text("Sistema de puntaje") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showPuntajeSystemMenu) }
-                        )
-                        ExposedDropdownMenu(
-                            expanded = showPuntajeSystemMenu,
-                            onDismissRequest = { showPuntajeSystemMenu = false }
-                        ) {
-                            listOf(
-                                Pair("X_TO_M", "X a M"),
-                                Pair("11_TO_M", "11 a M")
-                            ).forEach { (value, label) ->
-                                DropdownMenuItem(
-                                    text = { Text(label) },
-                                    onClick = {
-                                        puntajeSystem = value
-                                        showPuntajeSystemMenu = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = arrowsPerEndText,
-                            onValueChange = { arrowsPerEndText = it },
-                            label = { Text("Flechas/tanda") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f)
-                        )
-                        OutlinedTextField(
-                            value = endsCountText,
-                            onValueChange = { endsCountText = it },
-                            label = { Text("Tandas") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
@@ -1432,98 +1690,59 @@ private fun CreateTrainingDialog(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Clima")
+                        Text("Series", style = MaterialTheme.typography.titleMedium)
                         TextButton(onClick = {
-                            if (permissionGranted.value) {
-                                permissionGranted.value = true
-                            } else {
-                                permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-                            }
-                        }) {
-                            Text(if (permissionGranted.value) "Actualizar" else "Usar ubicacion")
-                        }
-                    }
-                }
-
-                item {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedTextField(
-                            value = windSpeedText,
-                            onValueChange = { windSpeedText = it },
-                            label = { Text("Viento") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            modifier = Modifier.weight(1f)
-                        )
-                        ExposedDropdownMenuBox(
-                            expanded = showWindUnitMenu,
-                            onExpandedChange = { showWindUnitMenu = !showWindUnitMenu },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            OutlinedTextField(
-                                value = windUnit,
-                                onValueChange = { windUnit = it },
-                                label = { Text("Unidad") },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .menuAnchor(),
-                                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showWindUnitMenu) }
+                            seriesList = seriesList + SeriesFormState(
+                                distanceText = "",
+                                category = "",
+                                targetType = "",
+                                arrowsPerEndText = "6",
+                                endsCountText = "6",
+                                targetZoneCount = "10",
+                                puntajeSystem = "X_TO_M",
+                                temperatureText = "",
+                                windSpeedText = "",
+                                windDirectionText = "",
+                                windUnit = "",
+                                skyCondition = ""
                             )
-                            ExposedDropdownMenu(
-                                expanded = showWindUnitMenu,
-                                onDismissRequest = { showWindUnitMenu = false }
-                            ) {
-                                windUnitOptions().forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(option) },
-                                        onClick = {
-                                            windUnit = option
-                                            showWindUnitMenu = false
-                                        }
-                                    )
-                                }
-                            }
+                        }) {
+                            Text("+ Agregar serie")
                         }
                     }
                 }
 
-                item {
-                    OutlinedTextField(
-                        value = windDirectionText,
-                        onValueChange = { windDirectionText = it },
-                        label = { Text("Direccion (grados)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                item {
-                    ExposedDropdownMenuBox(
-                        expanded = showSkyMenu,
-                        onExpandedChange = { showSkyMenu = !showSkyMenu }
-                    ) {
-                        OutlinedTextField(
-                            value = skyCondition,
-                            onValueChange = { skyCondition = it },
-                            label = { Text("Cielo") },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showSkyMenu) }
-                        )
-                        ExposedDropdownMenu(
-                            expanded = showSkyMenu,
-                            onDismissRequest = { showSkyMenu = false }
-                        ) {
-                            skyOptions().forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
-                                    onClick = {
-                                        skyCondition = option
-                                        showSkyMenu = false
+                seriesList.forEachIndexed { index, series ->
+                    item {
+                        SeriesFormSection(
+                            seriesNumber = index+ 1,
+                            series = series,
+                            onUpdate = { updatedSeries ->
+                                seriesList = seriesList.toMutableList().apply {
+                                    set(index, updatedSeries)
+                                }
+                            },
+                            onRemove = if (seriesList.size > 1) {
+                                {
+                                    seriesList = seriesList.toMutableList().apply {
+                                        removeAt(index)
                                     }
-                                )
+                                }
+                            } else null,
+                            permissionGranted = permissionGranted.value,
+                            onRequestLocation = {
+                                if (permissionGranted.value) {
+                                    permissionGranted.value = true
+                                } else {
+                                    permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                                }
+                            },
+                            onFetchWeather = onFetchWeather,
+                            onLocationFetched = { lat, lon ->
+                                locationLat = lat
+                                locationLon = lon
                             }
-                        }
+                        )
                     }
                 }
 
@@ -1538,6 +1757,325 @@ private fun CreateTrainingDialog(
             }
         }
     )
+}
+
+private data class SeriesFormState(
+    var distanceText: String,
+    var category: String,
+    var targetType: String,
+    var arrowsPerEndText: String,
+    var endsCountText: String,
+    var targetZoneCount: String,
+    var puntajeSystem: String,
+    var temperatureText: String,
+    var windSpeedText: String,
+    var windDirectionText: String,
+    var windUnit: String,
+    var skyCondition: String
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SeriesFormSection(
+    seriesNumber: Int,
+    series: SeriesFormState,
+    onUpdate: (SeriesFormState) -> Unit,
+    onRemove: (() -> Unit)?,
+    permissionGranted: Boolean,
+    onRequestLocation: () -> Unit,
+    onFetchWeather: suspend (Double, Double) -> WeatherSnapshot?,
+    onLocationFetched: (Double, Double) -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    var showCategoryMenu by remember { mutableStateOf(false) }
+    var showTargetMenu by remember { mutableStateOf(false) }
+    var showWindUnitMenu by remember { mutableStateOf(false) }
+    var showSkyMenu by remember { mutableStateOf(false) }
+    var showZoneCountMenu by remember { mutableStateOf(false) }
+    var showPuntajeSystemMenu by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Serie $seriesNumber", style = MaterialTheme.typography.titleSmall)
+                if (onRemove != null) {
+                    IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Delete, "Eliminar serie", tint = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = series.distanceText,
+                onValueChange = { onUpdate(series.copy(distanceText = it)) },
+                label = { Text("Distancia (m)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            ExposedDropdownMenuBox(
+                expanded = showCategoryMenu,
+                onExpandedChange = { showCategoryMenu = !showCategoryMenu }
+            ) {
+                OutlinedTextField(
+                    value = series.category,
+                    onValueChange = { onUpdate(series.copy(category = it)) },
+                    label = { Text("Categoria") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showCategoryMenu) }
+                )
+                ExposedDropdownMenu(
+                    expanded = showCategoryMenu,
+                    onDismissRequest = { showCategoryMenu = false }
+                ) {
+                    categoryOptions().forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                onUpdate(series.copy(category = option))
+                                showCategoryMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            ExposedDropdownMenuBox(
+                expanded = showTargetMenu,
+                onExpandedChange = { showTargetMenu = !showTargetMenu }
+            ) {
+                OutlinedTextField(
+                    value = series.targetType,
+                    onValueChange = { onUpdate(series.copy(targetType = it)) },
+                    label = { Text("Tipo de blanco") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showTargetMenu) }
+                )
+                ExposedDropdownMenu(
+                    expanded = showTargetMenu,
+                    onDismissRequest = { showTargetMenu = false }
+                ) {
+                    targetOptions().forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                onUpdate(series.copy(targetType = option))
+                                showTargetMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            ExposedDropdownMenuBox(
+                expanded = showZoneCountMenu,
+                onExpandedChange = { showZoneCountMenu = !showZoneCountMenu }
+            ) {
+                OutlinedTextField(
+                    value = series.targetZoneCount,
+                    onValueChange = { onUpdate(series.copy(targetZoneCount = it)) },
+                    label = { Text("Zonas del blanco") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showZoneCountMenu) }
+                )
+                ExposedDropdownMenu(
+                    expanded = showZoneCountMenu,
+                    onDismissRequest = { showZoneCountMenu = false }
+                ) {
+                    listOf("6", "10").forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                onUpdate(series.copy(targetZoneCount = option))
+                                showZoneCountMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            ExposedDropdownMenuBox(
+                expanded = showPuntajeSystemMenu,
+                onExpandedChange = { showPuntajeSystemMenu = !showPuntajeSystemMenu }
+            ) {
+                OutlinedTextField(
+                    value = if (series.puntajeSystem == "X_TO_M") "X a M" else "11 a M",
+                    onValueChange = { },
+                    label = { Text("Sistema de puntaje") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showPuntajeSystemMenu) }
+                )
+                ExposedDropdownMenu(
+                    expanded = showPuntajeSystemMenu,
+                    onDismissRequest = { showPuntajeSystemMenu = false }
+                ) {
+                    listOf(
+                        Pair("X_TO_M", "X a M"),
+                        Pair("11_TO_M", "11 a M")
+                    ).forEach { (value, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label) },
+                            onClick = {
+                                onUpdate(series.copy(puntajeSystem = value))
+                                showPuntajeSystemMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = series.arrowsPerEndText,
+                    onValueChange = { onUpdate(series.copy(arrowsPerEndText = it)) },
+                    label = { Text("Flechas/tanda") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = series.endsCountText,
+                    onValueChange = { onUpdate(series.copy(endsCountText = it)) },
+                    label = { Text("Tandas") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            OutlinedTextField(
+                value = series.temperatureText,
+                onValueChange = { onUpdate(series.copy(temperatureText = it)) },
+                label = { Text("Temperatura (°C)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Clima", style = MaterialTheme.typography.labelMedium)
+                TextButton(onClick = {
+                    scope.launch {
+                        onRequestLocation()
+                        if (permissionGranted) {
+                            val location = getCurrentLocation(context)
+                            if (location != null) {
+                                onLocationFetched(location.latitude, location.longitude)
+                                val weather = onFetchWeather(location.latitude, location.longitude)
+                                if (weather != null) {
+                                    onUpdate(series.copy(
+                                        temperatureText = weather.temperature?.toString().orEmpty(),
+                                        windSpeedText = weather.windSpeed?.toString().orEmpty(),
+                                        windDirectionText = weather.windDirectionDegrees?.toString().orEmpty(),
+                                        windUnit = weather.windSpeedUnit.orEmpty(),
+                                        skyCondition = weather.skyCondition.orEmpty()
+                                    ))
+                                }
+                            }
+                        }
+                    }
+                }) {
+                    Text(if (permissionGranted) "Actualizar" else "Usar ubicacion")
+                }
+            }
+
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = series.windSpeedText,
+                    onValueChange = { onUpdate(series.copy(windSpeedText = it)) },
+                    label = { Text("Viento") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
+                )
+                ExposedDropdownMenuBox(
+                    expanded = showWindUnitMenu,
+                    onExpandedChange = { showWindUnitMenu = !showWindUnitMenu },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    OutlinedTextField(
+                        value = series.windUnit,
+                        onValueChange = { onUpdate(series.copy(windUnit = it)) },
+                        label = { Text("Unidad") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showWindUnitMenu) }
+                    )
+                    ExposedDropdownMenu(
+                        expanded = showWindUnitMenu,
+                        onDismissRequest = { showWindUnitMenu = false }
+                    ) {
+                        windUnitOptions().forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    onUpdate(series.copy(windUnit = option))
+                                    showWindUnitMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = series.windDirectionText,
+                onValueChange = { onUpdate(series.copy(windDirectionText = it)) },
+                label = { Text("Direccion (grados)") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            ExposedDropdownMenuBox(
+                expanded = showSkyMenu,
+                onExpandedChange = { showSkyMenu = !showSkyMenu }
+            ) {
+                OutlinedTextField(
+                    value = series.skyCondition,
+                    onValueChange = { onUpdate(series.copy(skyCondition = it)) },
+                    label = { Text("Cielo") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showSkyMenu) }
+                )
+                ExposedDropdownMenu(
+                    expanded = showSkyMenu,
+                    onDismissRequest = { showSkyMenu = false }
+                ) {
+                    skyOptions().forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = {
+                                onUpdate(series.copy(skyCondition = option))
+                                showSkyMenu = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 private fun windUnitOptions(): List<String> = listOf("m/s", "km/h", "kn")

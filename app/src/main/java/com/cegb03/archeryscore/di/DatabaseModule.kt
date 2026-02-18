@@ -3,6 +3,7 @@ package com.cegb03.archeryscore.di
 import android.content.Context
 import androidx.room.Room
 import com.cegb03.archeryscore.data.local.training.AppDatabase
+import com.cegb03.archeryscore.data.local.training.MIGRATION_4_5
 import com.cegb03.archeryscore.data.local.training.TrainingDao
 import dagger.Module
 import dagger.Provides
@@ -22,6 +23,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "archeryscore.db"
         )
+            .addMigrations(MIGRATION_4_5)
             .fallbackToDestructiveMigration()
             .build()
     }
