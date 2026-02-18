@@ -27,6 +27,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -80,6 +81,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -99,6 +101,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cegb03.archeryscore.data.local.training.SeriesEntity
 import com.cegb03.archeryscore.data.local.training.TrainingEntity
+import com.cegb03.archeryscore.data.local.training.TrainingType
 import com.cegb03.archeryscore.data.local.training.TrainingWithSeries
 import com.cegb03.archeryscore.data.local.training.SeriesWithEnds
 import com.cegb03.archeryscore.data.model.WeatherSnapshot
@@ -112,7 +115,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sqrt
 import kotlinx.coroutines.launch
 
 @Composable
@@ -179,8 +185,8 @@ fun TrainingsScreen(
         CreateTrainingWithSeriesDialog(
             isLoggedIn = isLoggedIn,
             onDismiss = { showCreateDialog = false },
-            onCreate = { archerName, seriesList ->
-                viewModel.createTrainingWithSeries(archerName, seriesList)
+            onCreate = { archerName, seriesList, trainingType, isGroup ->
+                viewModel.createTrainingWithSeries(archerName, seriesList, trainingType, isGroup)
                 showCreateDialog = false
             },
             onFetchWeather = { lat, lon -> viewModel.fetchWeather(lat, lon) }
@@ -259,6 +265,8 @@ private fun TrainingCard(trainingWithSeries: TrainingWithSeries, onClick: () -> 
         val formatter = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
         formatter.format(Date(training.createdAt))
     }
+    val trainingTypeLabel = if (training.trainingType == TrainingType.TOURNAMENT) "Torneo" else "Entrenamiento"
+    val groupLabel = if (training.isGroup) "Grupal" else "Individual"
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -272,6 +280,8 @@ private fun TrainingCard(trainingWithSeries: TrainingWithSeries, onClick: () -> 
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = "Fecha: $date", style = MaterialTheme.typography.bodySmall)
+            Text(text = "Tipo: $trainingTypeLabel", style = MaterialTheme.typography.bodySmall)
+            Text(text = "Modalidad: $groupLabel", style = MaterialTheme.typography.bodySmall)
             
             // Mostrar información de series
             if (trainingWithSeries.series.size == 1) {
@@ -1073,6 +1083,18 @@ private fun SeriesStatsTab(
                     }
                 }
             }
+
+            item {
+                Text("Distribucion por color", style = MaterialTheme.typography.titleMedium)
+            }
+
+            item {
+                val parsedScores = ends.flatMap { parseScores(it.scoresText.orEmpty()) }
+                ScorePieChart(
+                    slices = buildColorSlices(parsedScores),
+                    total = parsedScores.size
+                )
+            }
         }
     }
 }
@@ -1229,6 +1251,20 @@ private fun GeneralStatsTab(
                         }
                     }
                 }
+            }
+
+            item {
+                Text("Distribucion por color", style = MaterialTheme.typography.titleMedium)
+            }
+
+            item {
+                val parsedScores = detail.series.flatMap { series ->
+                    series.ends.flatMap { parseScores(it.scoresText.orEmpty()) }
+                }
+                ScorePieChart(
+                    slices = buildColorSlices(parsedScores),
+                    total = parsedScores.size
+                )
             }
         }
     }
@@ -1442,6 +1478,12 @@ private data class ParsedScore(
     val isMiss: Boolean
 )
 
+private data class ScoreSlice(
+    val label: String,
+    val color: Color,
+    val count: Int
+)
+
 private fun parseScores(input: String): List<ParsedScore> {
     if (input.isBlank()) return emptyList()
     return input
@@ -1458,6 +1500,149 @@ private fun parseScores(input: String): List<ParsedScore> {
                 else -> null
             }
         }
+}
+
+@Composable
+private fun ScorePieChart(
+    slices: List<ScoreSlice>,
+    total: Int,
+    modifier: Modifier = Modifier
+) {
+    var selectedIndex by remember { mutableIntStateOf(-1) }
+    var chartSize by remember { mutableStateOf(IntSize.Zero) }
+
+    if (total == 0 || slices.isEmpty()) {
+        Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Text("Sin datos")
+        }
+        return
+    }
+
+    Column(modifier = modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Canvas(
+            modifier = Modifier
+                .size(180.dp)
+                .pointerInput(slices, chartSize) {
+                    detectTapGestures { offset ->
+                        if (chartSize.width == 0 || chartSize.height == 0) return@detectTapGestures
+                        selectedIndex = findSliceIndex(offset, chartSize, slices, total)
+                    }
+                }
+                .padding(4.dp)
+        ) {
+            chartSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+            var startAngle = -90f
+            val radius = min(size.width, size.height) / 2f
+
+            slices.forEachIndexed { index, slice ->
+                val sweep = slice.count.toFloat() / total * 360f
+                val isSelected = index == selectedIndex
+                val sliceRadius = if (isSelected) radius * 1.05f else radius
+                drawArc(
+                    color = slice.color,
+                    startAngle = startAngle,
+                    sweepAngle = sweep,
+                    useCenter = true,
+                    size = Size(sliceRadius * 2f, sliceRadius * 2f),
+                    topLeft = Offset(
+                        (size.width - sliceRadius * 2f) / 2f,
+                        (size.height - sliceRadius * 2f) / 2f
+                    )
+                )
+                startAngle += sweep
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            slices.forEach { slice ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(slice.color, shape = CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("${slice.label}: ${formatPercent(slice.count, total)} (${slice.count})")
+                }
+            }
+        }
+
+        if (selectedIndex in slices.indices) {
+            val selected = slices[selectedIndex]
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "${selected.label}: ${formatPercent(selected.count, total)} (${selected.count})",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun findSliceIndex(
+    offset: Offset,
+    size: IntSize,
+    slices: List<ScoreSlice>,
+    total: Int
+): Int {
+    val center = Offset(size.width / 2f, size.height / 2f)
+    val dx = offset.x - center.x
+    val dy = offset.y - center.y
+    val distance = sqrt(dx * dx + dy * dy)
+    val radius = min(size.width, size.height) / 2f
+    if (distance > radius) return -1
+
+    val angle = Math.toDegrees(atan2(dy.toDouble(), dx.toDouble())).toFloat()
+    val normalized = (angle + 450f) % 360f
+
+    var start = 0f
+    slices.forEachIndexed { index, slice ->
+        val sweep = slice.count.toFloat() / total * 360f
+        val end = start + sweep
+        if (normalized in start..end) return index
+        start = end
+    }
+    return -1
+}
+
+private fun buildColorSlices(scores: List<ParsedScore>): List<ScoreSlice> {
+    val counts = mutableMapOf(
+        "Amarillo" to 0,
+        "Rojo" to 0,
+        "Azul" to 0,
+        "Negro" to 0,
+        "Blanco" to 0
+    )
+
+    scores.forEach { score ->
+        val bucket = scoreToBucket(score)
+        counts[bucket] = (counts[bucket] ?: 0) + 1
+    }
+
+    return listOf(
+        ScoreSlice("Amarillo", getScoreColor("10"), counts["Amarillo"] ?: 0),
+        ScoreSlice("Rojo", getScoreColor("8"), counts["Rojo"] ?: 0),
+        ScoreSlice("Azul", getScoreColor("6"), counts["Azul"] ?: 0),
+        ScoreSlice("Negro", getScoreColor("4"), counts["Negro"] ?: 0),
+        ScoreSlice("Blanco", getScoreColor("2"), counts["Blanco"] ?: 0)
+    ).filter { it.count > 0 }
+}
+
+private fun scoreToBucket(score: ParsedScore): String {
+    return when {
+        score.isX || score.score >= 9 -> "Amarillo"
+        score.score in 7..8 -> "Rojo"
+        score.score in 5..6 -> "Azul"
+        score.score in 3..4 || score.score == 0 || score.isMiss -> "Negro"
+        else -> "Blanco"
+    }
+}
+
+private fun formatPercent(count: Int, total: Int): String {
+    if (total == 0) return "0%"
+    val percent = count.toDouble() / total * 100.0
+    return "%.1f%%".format(percent)
 }
 
 private fun sortScores(scores: List<ParsedScore>): List<ParsedScore> {
@@ -1535,12 +1720,15 @@ private fun validateScoreInput(input: String, zoneCount: Int, puntajeSystem: Str
 private fun CreateTrainingWithSeriesDialog(
     isLoggedIn: Boolean,
     onDismiss: () -> Unit,
-    onCreate: (String?, List<SeriesFormData>) -> Unit,
+    onCreate: (String?, List<SeriesFormData>, String, Boolean) -> Unit,
     onFetchWeather: suspend (Double, Double) -> WeatherSnapshot?
 ) {
     val context = LocalContext.current
 
     var archerName by remember { mutableStateOf("") }
+    var trainingType by remember { mutableStateOf(TrainingType.TRAINING) }
+    var isGroup by remember { mutableStateOf(false) }
+    var showTrainingTypeMenu by remember { mutableStateOf(false) }
     var seriesList by remember {
         mutableStateOf(listOf(
             SeriesFormState(
@@ -1654,7 +1842,7 @@ private fun CreateTrainingWithSeriesDialog(
             )
         }
 
-        onCreate(if (isLoggedIn) null else archerName, seriesDataList)
+        onCreate(if (isLoggedIn) null else archerName, seriesDataList, trainingType, isGroup)
     }
 
     AlertDialog(
@@ -1680,6 +1868,60 @@ private fun CreateTrainingWithSeriesDialog(
                             onValueChange = { archerName = it },
                             label = { Text("Nombre del arquero") },
                             modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                item {
+                    ExposedDropdownMenuBox(
+                        expanded = showTrainingTypeMenu,
+                        onExpandedChange = { showTrainingTypeMenu = !showTrainingTypeMenu }
+                    ) {
+                        OutlinedTextField(
+                            value = if (trainingType == TrainingType.TOURNAMENT) "Torneo" else "Entrenamiento",
+                            onValueChange = { },
+                            label = { Text("Tipo de registro") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(),
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = showTrainingTypeMenu) }
+                        )
+                        ExposedDropdownMenu(
+                            expanded = showTrainingTypeMenu,
+                            onDismissRequest = { showTrainingTypeMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Entrenamiento") },
+                                onClick = {
+                                    trainingType = TrainingType.TRAINING
+                                    showTrainingTypeMenu = false
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Torneo") },
+                                onClick = {
+                                    trainingType = TrainingType.TOURNAMENT
+                                    showTrainingTypeMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = !isGroup,
+                            onClick = { isGroup = false },
+                            label = { Text("Individual") }
+                        )
+                        FilterChip(
+                            selected = isGroup,
+                            onClick = { isGroup = true },
+                            label = { Text("Grupal") }
                         )
                     }
                 }
