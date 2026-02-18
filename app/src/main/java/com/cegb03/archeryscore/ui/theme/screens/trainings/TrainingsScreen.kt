@@ -475,42 +475,11 @@ private fun TrainingSheetTab(
         initialPage = if (targetPage >= 0 && targetPage < totalEnds) targetPage else 0
     )
 
-    // Estado para controlar el swipe
-    var hasTriggeredSwitch by remember { mutableStateOf(false) }
-
     // Navegar a targetPage si está configurado
     LaunchedEffect(targetPage) {
         if (targetPage >= 0 && targetPage < totalEnds) {
             pagerState.scrollToPage(targetPage)
             onPageChanged()
-            hasTriggeredSwitch = false // Resetear al cambiar de página
-        }
-    }
-
-    // Resetear el flag cuando cambiamos de página
-    LaunchedEffect(pagerState.settledPage) {
-        hasTriggeredSwitch = false
-    }
-
-    // Detectar intento de swipe más allá de la última página
-    LaunchedEffect(pagerState) {
-        snapshotFlow { 
-            Triple(
-                pagerState.settledPage, 
-                pagerState.currentPageOffsetFraction,
-                pagerState.isScrollInProgress
-            ) 
-        }.collect { (settledPage, offsetFraction, isScrolling) ->
-            // Solo detectar si estamos ASENTADOS en la última página e intentamos ir más allá
-            if (!hasTriggeredSwitch &&
-                settledPage == totalEnds - 1 && 
-                isScrolling &&
-                offsetFraction < -0.5f) {
-                
-                Log.d("ArcheryScore_Debug", "Detectado swipe al final (settledPage: $settledPage, offset: $offsetFraction), cambiando a Estadísticas")
-                hasTriggeredSwitch = true
-                onSwitchToStats()
-            }
         }
     }
 
@@ -557,10 +526,53 @@ private fun TrainingSheetTab(
             var dragOffset by remember { mutableStateOf(Offset.Zero) }
             var dropAreaBounds by remember { mutableStateOf<Pair<Offset, IntSize>?>(null) }
 
+            // Estado para controlar el swipe cuando estamos en la última página
+            var swipeOffsetX by remember { mutableStateOf(0f) }
+            var swipeOffsetY by remember { mutableStateOf(0f) }
+            var isHorizontalSwipe by remember { mutableStateOf(false) }
+            val isLastPage = pageIndex == totalEnds - 1
+
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .then(
+                        if (isLastPage) {
+                            Modifier.pointerInput(Unit) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        swipeOffsetX = 0f
+                                        swipeOffsetY = 0f
+                                        isHorizontalSwipe = false
+                                    },
+                                    onDragEnd = {
+                                        // Si el swipe fue hacia la izquierda, suficientemente largo y más horizontal que vertical
+                                        if (isHorizontalSwipe && swipeOffsetX < -200f) {
+                                            Log.d("ArcheryScore_Debug", "Detectado swipe hacia la izquierda en tanda $pageIndex (x: $swipeOffsetX, y: $swipeOffsetY), cambiando a Estadísticas")
+                                            onSwitchToStats()
+                                        }
+                                        swipeOffsetX = 0f
+                                        swipeOffsetY = 0f
+                                        isHorizontalSwipe = false
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        swipeOffsetX += dragAmount.x
+                                        swipeOffsetY += abs(dragAmount.y)
+                                        
+                                        // Determinar si es un swipe horizontal después de los primeros movimientos
+                                        if (abs(swipeOffsetX) > 30f || swipeOffsetY > 30f) {
+                                            if (abs(swipeOffsetX) > swipeOffsetY * 1.5f) {
+                                                isHorizontalSwipe = true
+                                                change.consume()
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        } else {
+                            Modifier
+                        }
+                    ),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Título de la tanda
