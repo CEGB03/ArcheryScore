@@ -59,10 +59,10 @@ class AuthViewModel @Inject constructor(
                 _isLoggedIn.value = isValidSession
                 _isInitialized.value = true
 
-                Log.d("DebugDev", "🔍 Auth status - Token: ${token?.take(10)}..., UserId: $userId")
-                Log.d("DebugDev", "🔍 Auth status - LoggedIn: ${_isLoggedIn.value}")
+                Log.d("ArcheryScore_Debug", "🔍 Auth status - Token: ${token?.take(10)}..., UserId: $userId")
+                Log.d("ArcheryScore_Debug", "🔍 Auth status - LoggedIn: ${_isLoggedIn.value}")
             } catch (e: Exception) {
-                Log.e("DebugDev", "❌ Error en checkAuthStatus: ${e.message}")
+                Log.e("ArcheryScore_Debug", "❌ Error en checkAuthStatus: ${e.message}")
                 _isLoggedIn.value = false
                 _isInitialized.value = true
             }
@@ -75,7 +75,7 @@ class AuthViewModel @Inject constructor(
             val token = tokenProvider.getToken()
             val userId = tokenProvider.getUserId()
             _isLoggedIn.value = token != null && userId != null
-            Log.d("DebugDev", "🔄 Auth refresh - LoggedIn: ${_isLoggedIn.value}")
+            Log.d("ArcheryScore_Debug", "🔄 Auth refresh - LoggedIn: ${_isLoggedIn.value}")
         }
     }
 
@@ -83,10 +83,10 @@ class AuthViewModel @Inject constructor(
     private fun loadUserProfile() {
         viewModelScope.launch {
             try {
-                Log.d("DebugDev", "🔄 Cargando perfil de usuario...")
+                Log.d("ArcheryScore_Debug", "🔄 Cargando perfil de usuario...")
                 // Aquí puedes cargar datos adicionales del usuario si es necesario
             } catch (e: Exception) {
-                Log.e("DebugDev", "Error cargando perfil: ${e.message}")
+                Log.e("ArcheryScore_Debug", "Error cargando perfil: ${e.message}")
             }
         }
     }
@@ -97,34 +97,34 @@ class AuthViewModel @Inject constructor(
                 popUpTo(0) { inclusive = true } // ✅ Limpia toda la pila
                 launchSingleTop = true
             }
-            Log.d("DebugDev", "✅ Navegando a Feed desde AuthViewModel")
+            Log.d("ArcheryScore_Debug", "✅ Navegando a Feed desde AuthViewModel")
         }
     }
 
     // ✅ Función para logout
     fun logout(onComplete: () -> Unit = {}) {
-        Log.d("DebugDev", "🚪 Iniciando logout - limpiando token y preferencias")
+        Log.d("ArcheryScore_Debug", "🚪 Iniciando logout - limpiando token y preferencias")
         viewModelScope.launch {
             try {
                 // 1️⃣ Limpiar token
                 tokenProvider.clearToken()
-                Log.d("DebugDev", "✅ Token limpiado")
+                Log.d("ArcheryScore_Debug", "✅ Token limpiado")
 //                biometricEnabledFlow
                 // 2️⃣ Limpiar DataStore COMPLETO (incluyendo biometría)
-                Log.d("DebugDev", "🧹 Limpiando todas las preferencias del DataStore")
+                Log.d("ArcheryScore_Debug", "🧹 Limpiando todas las preferencias del DataStore")
                 preferencesManager.clearAll()
-                Log.d("DebugDev", "✅ DataStore completamente limpiado")
+                Log.d("ArcheryScore_Debug", "✅ DataStore completamente limpiado")
                 
                 // 3️⃣ Actualizar estado
                 _isLoggedIn.value = false
-                Log.d("DebugDev", "✅ Token limpiado, DataStore limpiado")
-                Log.i("DebugDev", "✅ Cierre de sesión exitoso")
+                Log.d("ArcheryScore_Debug", "✅ Token limpiado, DataStore limpiado")
+                Log.i("ArcheryScore_Debug", "✅ Cierre de sesión exitoso")
                 
                 // 4️⃣ Ejecutar callback
                 onComplete()
-                Log.d("DebugDev", "🚪 Usuario hizo logout")
+                Log.d("ArcheryScore_Debug", "🚪 Usuario hizo logout")
             } catch (e: Exception) {
-                Log.e("DebugDev", "❌ Error en logout", e)
+                Log.e("ArcheryScore_Debug", "❌ Error en logout", e)
             }
         }
     }
@@ -132,7 +132,7 @@ class AuthViewModel @Inject constructor(
     // ✅ Función para limpiar estado de autenticación
     fun clearAuthState() {
         _errorMessage.value = null
-        Log.d("DebugDev", "🧹 Estado de auth limpiado")
+        Log.d("ArcheryScore_Debug", "🧹 Estado de auth limpiado")
     }
 
     // ✅ Función para limpiar errores
@@ -165,17 +165,17 @@ class AuthViewModel @Inject constructor(
                 
                 if (success) {
                     _isLoggedIn.value = true
-                    Log.d("DebugDev", "✅ Login exitoso para: $username")
+                    Log.d("ArcheryScore_Debug", "✅ Login exitoso para: $username")
                     _errorMessage.value = null
                 } else {
                     _isLoggedIn.value = false
                     _errorMessage.value = message ?: "Error en login"
-                    Log.e("DebugDev", "❌ Error en login: $message")
+                    Log.e("ArcheryScore_Debug", "❌ Error en login: $message")
                 }
             } catch (e: Exception) {
                 _isLoggedIn.value = false
                 _errorMessage.value = e.message ?: "Error desconocido"
-                Log.e("DebugDev", "❌ Excepción en login", e)
+                Log.e("ArcheryScore_Debug", "❌ Excepción en login", e)
             } finally {
                 _isLoading.value = false
             }
@@ -204,17 +204,17 @@ class AuthViewModel @Inject constructor(
                 
                 if (success) {
                     _isLoggedIn.value = true
-                    Log.d("DebugDev", "✅ Registro exitoso para: $email")
+                    Log.d("ArcheryScore_Debug", "✅ Registro exitoso para: $email")
                     _errorMessage.value = null
                 } else {
                     _isLoggedIn.value = false
                     _errorMessage.value = message ?: "Error en registro"
-                    Log.e("DebugDev", "❌ Error en registro: $message")
+                    Log.e("ArcheryScore_Debug", "❌ Error en registro: $message")
                 }
             } catch (e: Exception) {
                 _isLoggedIn.value = false
                 _errorMessage.value = e.message ?: "Error desconocido"
-                Log.e("DebugDev", "❌ Excepción en registro", e)
+                Log.e("ArcheryScore_Debug", "❌ Excepción en registro", e)
             } finally {
                 _isLoading.value = false
             }

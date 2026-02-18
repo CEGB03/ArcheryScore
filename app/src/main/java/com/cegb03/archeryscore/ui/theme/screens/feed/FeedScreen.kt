@@ -33,7 +33,7 @@ fun FeedScreen(
     LaunchedEffect(Unit) {
         authViewModel.isLoggedIn.collect { loggedIn ->
             if (loggedIn) {
-                Log.d("DebugDev", "✅ Usuario logueado, cargando productos y favoritos")
+                Log.d("ArcheryScore_Debug", "✅ Usuario logueado, cargando productos y favoritos")
                 //hacer cargar lo que haga falta
             }
         }
@@ -49,7 +49,7 @@ fun FeedScreen(
 
     if (!isLoggedIn) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Log.e("DebugDev", "el isLoggedIn dio false")
+            Log.e("ArcheryScore_Debug", "el isLoggedIn dio false")
             CircularProgressIndicator()
         }
     } else {
