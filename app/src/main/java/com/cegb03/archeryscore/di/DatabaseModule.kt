@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.cegb03.archeryscore.data.local.training.AppDatabase
 import com.cegb03.archeryscore.data.local.training.MIGRATION_4_5
+import com.cegb03.archeryscore.data.local.training.MIGRATION_5_6
 import com.cegb03.archeryscore.data.local.training.TrainingDao
 import dagger.Module
 import dagger.Provides
@@ -24,6 +25,7 @@ object DatabaseModule {
             "archeryscore.db"
         )
             .addMigrations(MIGRATION_4_5)
+            .addMigrations(MIGRATION_5_6)
             .fallbackToDestructiveMigration()
             .build()
     }

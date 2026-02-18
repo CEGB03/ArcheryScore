@@ -40,6 +40,7 @@ import com.cegb03.archeryscore.ui.theme.ArcheryScoreTheme
 import com.cegb03.archeryscore.ui.theme.screens.access.AccessScreen
 import com.cegb03.archeryscore.ui.theme.screens.login.LoginScreen
 import com.cegb03.archeryscore.ui.theme.screens.register.RegisterScreen
+import com.cegb03.archeryscore.ui.theme.screens.home.HomeStatsScreen
 import com.cegb03.archeryscore.ui.theme.screens.trainings.TrainingsScreen
 import com.cegb03.archeryscore.ui.theme.screens.tournaments.TournamentsScreen
 import com.cegb03.archeryscore.viewmodel.AuthViewModel
@@ -153,8 +154,7 @@ fun MainAppContent() {
     ) { innerPadding ->
         when (currentDestination) {
                 AppDestinations.INICIO -> {
-                    Greeting(
-                        name = "Android",
+                    HomeStatsScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)

@@ -62,13 +62,17 @@ class TrainingsViewModel @Inject constructor(
     // Nueva función para crear training con múltiples series
     fun createTrainingWithSeries(
         archerName: String?,
-        seriesList: List<SeriesFormData>
+        seriesList: List<SeriesFormData>,
+        trainingType: String,
+        isGroup: Boolean
     ) {
         Log.d("ArcheryScore_Debug", "createTrainingWithSeries - archer: $archerName, series count: ${seriesList.size}")
         viewModelScope.launch {
             val training = TrainingEntity(
                 createdAt = System.currentTimeMillis(),
-                archerName = archerName
+                archerName = archerName,
+                trainingType = trainingType,
+                isGroup = isGroup
             )
             val trainingId = trainingRepository.createTrainingWithSeries(training, seriesList)
             Log.d("ArcheryScore_Debug", "Training with series created with ID: $trainingId")
