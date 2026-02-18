@@ -10,8 +10,15 @@ import androidx.room.PrimaryKey
 data class TrainingEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val createdAt: Long,
-    val archerName: String?
+    val archerName: String?,
+    val trainingType: String = TrainingType.TRAINING,
+    val isGroup: Boolean = false
 )
+
+object TrainingType {
+    const val TRAINING = "TRAINING"
+    const val TOURNAMENT = "TOURNAMENT"
+}
 
 // Nueva entidad Series - Cada serie tiene sus propios parámetros
 @Entity(
