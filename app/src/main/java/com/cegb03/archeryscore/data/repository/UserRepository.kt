@@ -28,7 +28,7 @@ class UserRepository @Inject constructor(
     }
 
     suspend fun loginUser(email: String, password: String): Pair<Boolean, String?> {
-        Log.i("DebugDev", "Iniciando login para email=$email")
+        Log.i("ArcheryScore_Debug", "Iniciando login para email=$email")
         return try {
             val credentials = mapOf("email" to email, "password" to password)
 
@@ -38,7 +38,7 @@ class UserRepository @Inject constructor(
                     api.loginUser(credentials)
                 }
             } catch (timeout: TimeoutCancellationException) {
-                Log.e("DebugDev", "⏰ Timeout en login")
+                Log.e("ArcheryScore_Debug", "⏰ Timeout en login")
                 return Pair(false, "El servidor no respondió. Intenta más tarde.")
             }
 
@@ -51,20 +51,20 @@ class UserRepository @Inject constructor(
                     val user = try {
                         api.getUserByMail(email)
                     } catch (e: Exception) {
-                        Log.w("DebugDev", "No se pudo obtener usuario por email", e)
+                        Log.w("ArcheryScore_Debug", "No se pudo obtener usuario por email", e)
                         null
                     }
                     val userId = user?.id
                     if (userId != null) {
                         tokenProvider.saveUserId(userId)
-                        Log.i("DebugDev", "Login successful, token e id guardados (id=$userId)")
+                        Log.i("ArcheryScore_Debug", "Login successful, token e id guardados (id=$userId)")
                         Pair(true, null)
                     } else {
-                        Log.w("DebugDev", "Login exitoso pero no se obtuvo userId")
+                        Log.w("ArcheryScore_Debug", "Login exitoso pero no se obtuvo userId")
                         Pair(true, null) // aún permitimos login pero sin userId
                     }
                 } else {
-                    Log.w("DebugDev", "Login fallido: token no recibido")
+                    Log.w("ArcheryScore_Debug", "Login fallido: token no recibido")
                     Pair(false, "Token no recibido")
                 }
             } else {
@@ -72,7 +72,7 @@ class UserRepository @Inject constructor(
                 Pair(false, "Error del servidor: $errorBody")
             }
         } catch (e: Exception) {
-            Log.e("DebugDev", "Exception durante login", e)
+            Log.e("ArcheryScore_Debug", "Exception durante login", e)
 
             // ✅ Mensajes de error más específicos
             val errorMessage = when {
@@ -97,7 +97,7 @@ class UserRepository @Inject constructor(
                 Pair(false, "Error del servidor: $errorBody")
             }
         } catch (e: Exception) {
-            Log.e("DebugDev", "Exception during register", e)
+            Log.e("ArcheryScore_Debug", "Exception during register", e)
             Pair(false, "Error al registrar usuario: ${e.localizedMessage ?: e.message}")
         }
     }
@@ -105,27 +105,27 @@ class UserRepository @Inject constructor(
     suspend fun getCurrentUser(): User? {
         val userId = tokenProvider.getUserId()
         if (userId == null) {
-            Log.i("DebugDev", "No hay userId, no se puede obtener el usuario")
+            Log.i("ArcheryScore_Debug", "No hay userId, no se puede obtener el usuario")
             return null
         }
 
-        Log.i("DebugDev", "Intentando obtener usuario por ID: $userId")
+        Log.i("ArcheryScore_Debug", "Intentando obtener usuario por ID: $userId")
         return try {
             val user = api.getUserById(userId)
-            Log.i("DebugDev", "Usuario obtenido: $user")
+            Log.i("ArcheryScore_Debug", "Usuario obtenido: $user")
             user
         } catch (e: HttpException) {
-            Log.e("DebugDev", "getCurrentUser failed: ${e.code()} ${e.response()?.errorBody()?.string()}", e)
+            Log.e("ArcheryScore_Debug", "getCurrentUser failed: ${e.code()} ${e.response()?.errorBody()?.string()}", e)
             null
         } catch (e: Exception) {
-            Log.e("DebugDev", "Exception fetching current user by id", e)
+            Log.e("ArcheryScore_Debug", "Exception fetching current user by id", e)
             null
         }
     }
 
     suspend fun updateUser(user: User): User? {
         val id = user.id ?: run {
-            Log.w("DebugDev", "No se puede actualizar usuario sin id")
+            Log.w("ArcheryScore_Debug", "No se puede actualizar usuario sin id")
             return null
         }
         return try {
@@ -137,14 +137,14 @@ class UserRepository @Inject constructor(
             val response: Response<User> = api.updateUser(id.toString(), request)
             if (response.isSuccessful) {
                 val updated = response.body()
-                Log.d("DebugDev", "✅ Usuario actualizado en backend: $updated")
+                Log.d("ArcheryScore_Debug", "✅ Usuario actualizado en backend: $updated")
                 updated
             } else {
-                Log.w("DebugDev", "updateUser no fue exitoso: ${response.code()} ${response.errorBody()?.string()}")
+                Log.w("ArcheryScore_Debug", "updateUser no fue exitoso: ${response.code()} ${response.errorBody()?.string()}")
                 null
             }
         } catch (e: Exception) {
-            Log.e("DebugDev", "Exception updating user", e)
+            Log.e("ArcheryScore_Debug", "Exception updating user", e)
             null
         }
     }
@@ -152,7 +152,7 @@ class UserRepository @Inject constructor(
     suspend fun changePassword(newPassword: String): Boolean {
         val userId = tokenProvider.getUserId()
         if (userId == null) {
-            Log.w("DebugDev", "No hay userId para cambiar contraseña")
+            Log.w("ArcheryScore_Debug", "No hay userId para cambiar contraseña")
             return false
         }
         return try {
@@ -160,13 +160,13 @@ class UserRepository @Inject constructor(
             val response = api.updatedPassword(userId.toString(), request)
             if (!response.isSuccessful) {
                 Log.w(
-                    "DebugDev",
+                    "ArcheryScore_Debug",
                     "changePassword no fue exitoso: ${response.code()} ${response.errorBody()?.string()}"
                 )
             }
             response.isSuccessful
         } catch (e: Exception) {
-            Log.e("DebugDev", "Exception changing password", e)
+            Log.e("ArcheryScore_Debug", "Exception changing password", e)
             false
         }
     }
@@ -187,7 +187,7 @@ class UserRepository @Inject constructor(
         return try {
             api.getUserById(id)
         } catch (e: Exception) {
-            Log.e("DebugDev", "Exception fetching user by id", e)
+            Log.e("ArcheryScore_Debug", "Exception fetching user by id", e)
             null
         }
     }
@@ -202,19 +202,19 @@ class UserRepository @Inject constructor(
 
     suspend fun createUserFromGoogle(username: String, email: String): User? {
         return try {
-            Log.d("DebugDev", "🔍 Verificando si usuario Google existe: $email")
+            Log.d("ArcheryScore_Debug", "🔍 Verificando si usuario Google existe: $email")
 
             // 1. PRIMERO verificar si el usuario YA EXISTE
             try {
                 val existingUser = getUserByEmail(email)
-                Log.d("DebugDev", "✅ Usuario EXISTE, no necesita registro: $email")
+                Log.d("ArcheryScore_Debug", "✅ Usuario EXISTE, no necesita registro: $email")
 
                 // Devolver el usuario existente en lugar de crear uno nuevo
                 return existingUser
 
             } catch (e: Exception) {
                 if (e is HttpException && e.code() == 404) {
-                    Log.d("DebugDev", "🆕 Usuario NUEVO, procediendo con registro: $email")
+                    Log.d("ArcheryScore_Debug", "🆕 Usuario NUEVO, procediendo con registro: $email")
 
                     // 2. SOLO si no existe, CREARLO
                     val timestamp = System.currentTimeMillis()
@@ -227,25 +227,25 @@ class UserRepository @Inject constructor(
                         role = "client"
                     )
 
-                    Log.d("DebugDev", "Intentando crear usuario Google: $newUser")
+                    Log.d("ArcheryScore_Debug", "Intentando crear usuario Google: $newUser")
 
                     val response = api.newUser(newUser)
                     if (response.isSuccessful) {
-                        Log.d("DebugDev", "✅ Usuario Google creado exitosamente")
+                        Log.d("ArcheryScore_Debug", "✅ Usuario Google creado exitosamente")
                         // Obtener el usuario recién creado
                         api.getUserByMail(email)
                     } else {
-                        Log.e("DebugDev", "❌ Error al crear usuario: ${response.errorBody()?.string()}")
+                        Log.e("ArcheryScore_Debug", "❌ Error al crear usuario: ${response.errorBody()?.string()}")
                         null
                     }
                 } else {
                     // Otro tipo de error
-                    Log.e("DebugDev", "❌ Error al verificar usuario: ${e.message}")
+                    Log.e("ArcheryScore_Debug", "❌ Error al verificar usuario: ${e.message}")
                     null
                 }
             }
         } catch (e: Exception) {
-            Log.e("DebugDev", "❌ Excepción al crear usuario Google", e)
+            Log.e("ArcheryScore_Debug", "❌ Excepción al crear usuario Google", e)
             null
         }
     }
@@ -263,33 +263,33 @@ class UserRepository @Inject constructor(
             val savedToken = tokenProvider.getToken()
             val savedUserId = tokenProvider.getUserId()
             
-            Log.d("DebugDev", "Google session saved - token: $savedToken, userId: $savedUserId")
+            Log.d("ArcheryScore_Debug", "Google session saved - token: $savedToken, userId: $savedUserId")
             
             savedToken != null && savedUserId != null
         } catch (e: Exception) {
-            Log.e("DebugDev", "Error al guardar sesión de Google", e)
+            Log.e("ArcheryScore_Debug", "Error al guardar sesión de Google", e)
             false
         }
     }
 
     suspend fun quickGoogleAuth(username: String, email: String): Result<User> {
         return try {
-            Log.d("DebugDev", "⚡ Quick Google Auth para: $email")
+            Log.d("ArcheryScore_Debug", "⚡ Quick Google Auth para: $email")
 
             // Intentar obtener usuario existente con timeout
             val user = try {
                 withTimeout(25000) { // ✅ 25 segundos timeout
                     api.getUserByMail(email).also {
-                        Log.d("DebugDev", "✅ Usuario existente encontrado")
+                        Log.d("ArcheryScore_Debug", "✅ Usuario existente encontrado")
                     }
                 }
             } catch (timeout: TimeoutCancellationException) {
-                Log.e("DebugDev", "⏰ Timeout al verificar usuario existente")
+                Log.e("ArcheryScore_Debug", "⏰ Timeout al verificar usuario existente")
                 return Result.failure(Exception("El servidor no respondió a tiempo"))
             } catch (e: HttpException) {
                 if (e.code() == 404) {
                     // Usuario no existe - crear
-                    Log.d("DebugDev", "🆕 Creando usuario rápido: $email")
+                    Log.d("ArcheryScore_Debug", "🆕 Creando usuario rápido: $email")
                     val newUser = User(
                         username = username,
                         email = email,
@@ -302,22 +302,22 @@ class UserRepository @Inject constructor(
                             api.register(newUser)
                         }
                     } catch (timeout: TimeoutCancellationException) {
-                        Log.e("DebugDev", "⏰ Timeout al crear usuario")
+                        Log.e("ArcheryScore_Debug", "⏰ Timeout al crear usuario")
                         return Result.failure(Exception("Timeout al crear usuario"))
                     } catch (e: Exception) {
-                        Log.e("DebugDev", "❌ Error al crear usuario: ${e.message}")
+                        Log.e("ArcheryScore_Debug", "❌ Error al crear usuario: ${e.message}")
                         return Result.failure(e)
                     }
                 } else {
                     // Otro error HTTP
-                    Log.e("DebugDev", "❌ Error HTTP: ${e.code()} - ${e.message}")
+                    Log.e("ArcheryScore_Debug", "❌ Error HTTP: ${e.code()} - ${e.message}")
                     return Result.failure(e)
                 }
             }
 
             Result.success(user)
         } catch (e: Exception) {
-            Log.e("DebugDev", "❌ Error en quickGoogleAuth: ${e.message}", e)
+            Log.e("ArcheryScore_Debug", "❌ Error en quickGoogleAuth: ${e.message}", e)
             Result.failure(e)
         }
     }

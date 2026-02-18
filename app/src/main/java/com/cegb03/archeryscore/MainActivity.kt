@@ -2,6 +2,7 @@ package com.cegb03.archeryscore
 
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,17 +30,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.rememberNavController
+import androidx.activity.compose.BackHandler
 import com.cegb03.archeryscore.ui.theme.ArcheryScoreTheme
 import com.cegb03.archeryscore.ui.theme.screens.access.AccessScreen
 import com.cegb03.archeryscore.ui.theme.screens.login.LoginScreen
 import com.cegb03.archeryscore.ui.theme.screens.register.RegisterScreen
+import com.cegb03.archeryscore.ui.theme.screens.trainings.TrainingsScreen
 import com.cegb03.archeryscore.ui.theme.screens.tournaments.TournamentsScreen
 import com.cegb03.archeryscore.viewmodel.AuthViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlin.system.exitProcess
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -80,8 +85,45 @@ fun MainAppContent() {
     Log.d("ArcheryScore_Debug", "📋 MainAppContent - Composable iniciado")
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.INICIO) }
     var profileSubScreen by rememberSaveable { mutableStateOf<ProfileScreen>(ProfileScreen.LOGIN) }
+    var backPressedCount by rememberSaveable { mutableStateOf(0) }
+    var hasDetailOpen by rememberSaveable { mutableStateOf(false) } // Detecta si hay sub-pantalla abierta
     val navController = rememberNavController()
+    val context = LocalContext.current
     Log.d("ArcheryScore_Debug", "✅ MainAppContent - Estados inicializados")
+
+    // Manejar el back button del sistema - solo activo cuando NO hay detalles abiertos
+    BackHandler(enabled = !hasDetailOpen) {
+        when {
+            // Si estamos en INICIO, contar clicks para cerrar la app
+            currentDestination == AppDestinations.INICIO -> {
+                backPressedCount++
+                Log.d("ArcheryScore_Debug", "👈 Back button presionado en INICIO - Click $backPressedCount/2")
+                
+                if (backPressedCount == 1) {
+                    Toast.makeText(
+                        context,
+                        "Presiona nuevamente para salir de la aplicación",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                } else if (backPressedCount >= 2) {
+                    Log.d("ArcheryScore_Debug", "❌ Cerrando aplicación - Usuario presionó back 2 veces en INICIO")
+                    exitProcess(0) // Cerrar la aplicación
+                }
+            }
+            // Si estamos en una sub-pantalla de PERFIL, volver a LOGIN
+            currentDestination == AppDestinations.PERFIL && profileSubScreen == ProfileScreen.REGISTER -> {
+                profileSubScreen = ProfileScreen.LOGIN
+                backPressedCount = 0
+                Log.d("ArcheryScore_Debug", "👈 Volviendo a LOGIN desde REGISTER")
+            }
+            // Si estamos en cualquier otra pantalla, volver a INICIO
+            else -> {
+                currentDestination = AppDestinations.INICIO
+                backPressedCount = 0
+                Log.d("ArcheryScore_Debug", "👈 Volviendo a INICIO desde ${currentDestination.label}")
+            }
+        }
+    }
 
     Scaffold(
         bottomBar = {
@@ -99,6 +141,7 @@ fun MainAppContent() {
                         onClick = {
                             Log.d("ArcheryScore_Debug", "🔀 Navegación - Destino seleccionado: ${destination.label}")
                             currentDestination = destination
+                            backPressedCount = 0 // Resetear contador de back button
                             if (destination == AppDestinations.PERFIL) {
                                 profileSubScreen = ProfileScreen.LOGIN
                             }
@@ -118,11 +161,14 @@ fun MainAppContent() {
                     )
                 }
                 AppDestinations.REGISTROS -> {
-                    Text(
-                        text = "Registro de entrenamientos",
+                    TrainingsScreen(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
+                            .padding(innerPadding),
+                        onDetailOpenChanged = { isOpen ->
+                            hasDetailOpen = isOpen
+                            Log.d("ArcheryScore_Debug", "📋 TrainingsScreen detalle abierto: $isOpen")
+                        }
                     )
                 }
                 AppDestinations.TORNEOS -> {
@@ -130,7 +176,11 @@ fun MainAppContent() {
                     TournamentsScreen(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
+                            .padding(innerPadding),
+                        onDetailOpenChanged = { isOpen ->
+                            hasDetailOpen = isOpen
+                            Log.d("ArcheryScore_Debug", "🎯 TournamentsScreen detalle abierto: $isOpen")
+                        }
                     )
                     Log.d("ArcheryScore_Debug", "✅ Navegación - Scaffold TORNEOS renderizado")
                 }
@@ -139,7 +189,10 @@ fun MainAppContent() {
                         ProfileScreen.LOGIN -> {
                             LoginScreen(
                                 navController = navController,
-                                onBackPressed = { currentDestination = AppDestinations.INICIO },
+                                onBackPressed = { 
+                                    currentDestination = AppDestinations.INICIO
+                                    backPressedCount = 0
+                                },
                                 onRegisterPressed = { profileSubScreen = ProfileScreen.REGISTER }
                             )
                         }
@@ -161,7 +214,7 @@ enum class AppDestinations(
     val icon: ImageVector,
 ) {
     INICIO("Inicio", Icons.Default.Home),
-    REGISTROS("Registros", Icons.Default.Event),
+    REGISTROS("Entrenamientos", Icons.Default.Event),
     TORNEOS("Torneos", Icons.Default.EmojiEvents),
     PERFIL("Perfil", Icons.Default.AccountBox),
 }
