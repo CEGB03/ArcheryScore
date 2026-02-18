@@ -17,12 +17,12 @@ class TrainingRepository @Inject constructor(
     fun observeTrainings(): Flow<List<TrainingEntity>> = trainingDao.observeTrainings()
 
     fun observeTrainingWithEnds(trainingId: Long): Flow<TrainingWithEnds?> {
-        Log.d("TrainingRepo", "observeTrainingWithEnds called for trainingId: $trainingId")
+        Log.d("ArcheryScore_Debug", "observeTrainingWithEnds called for trainingId: $trainingId")
         return combine(
             trainingDao.observeTrainingById(trainingId),
             trainingDao.observeTrainingEnds(trainingId)
         ) { training, ends ->
-            Log.d("TrainingRepo", "Flow emission - training: ${training != null}, ends: ${ends.size}")
+            Log.d("ArcheryScore_Debug", "Flow emission - training: ${training != null}, ends: ${ends.size}")
             if (training != null) {
                 TrainingWithEnds(training = training, ends = ends)
             } else {
@@ -32,9 +32,9 @@ class TrainingRepository @Inject constructor(
     }
 
     suspend fun createTraining(training: TrainingEntity): Long {
-        Log.d("TrainingRepo", "createTraining called - name: ${training.archerName}, ends: ${training.endsCount}")
+        Log.d("ArcheryScore_Debug", "createTraining called - name: ${training.archerName}, ends: ${training.endsCount}")
         val trainingId = trainingDao.insertTraining(training)
-        Log.d("TrainingRepo", "Training inserted with ID: $trainingId")
+        Log.d("ArcheryScore_Debug", "Training inserted with ID: $trainingId")
         val ends = (1..training.endsCount).map { number ->
             TrainingEndEntity(
                 trainingId = trainingId,
@@ -45,7 +45,7 @@ class TrainingRepository @Inject constructor(
             )
         }
         trainingDao.insertEnds(ends)
-        Log.d("TrainingRepo", "Inserted ${ends.size} ends for training $trainingId")
+        Log.d("ArcheryScore_Debug", "Inserted ${ends.size} ends for training $trainingId")
         return trainingId
     }
 
@@ -54,9 +54,9 @@ class TrainingRepository @Inject constructor(
     }
 
     suspend fun addNewEnd(trainingId: Long) {
-        Log.d("TrainingRepo", "addNewEnd called for trainingId: $trainingId")
+        Log.d("ArcheryScore_Debug", "addNewEnd called for trainingId: $trainingId")
         val maxEndNumber = trainingDao.getMaxEndNumber(trainingId) ?: 0
-        Log.d("TrainingRepo", "Current maxEndNumber: $maxEndNumber")
+        Log.d("ArcheryScore_Debug", "Current maxEndNumber: $maxEndNumber")
         val newEnd = TrainingEndEntity(
             trainingId = trainingId,
             endNumber = maxEndNumber + 1,
@@ -65,6 +65,6 @@ class TrainingRepository @Inject constructor(
             totalScore = null
         )
         trainingDao.insertEnd(newEnd)
-        Log.d("TrainingRepo", "Inserted new end with number ${maxEndNumber + 1}")
+        Log.d("ArcheryScore_Debug", "Inserted new end with number ${maxEndNumber + 1}")
     }
 }

@@ -41,7 +41,7 @@ fun SplashScreen(
     // ✅ INICIAR verificación de autenticación solo una vez
     LaunchedEffect(Unit) {
         if (!hasCheckedAuth) {
-            Log.d("DebugDev", "🔄 SplashScreen: Iniciando checkAuthStatus...")
+            Log.d("ArcheryScore_Debug", "🔄 SplashScreen: Iniciando checkAuthStatus...")
             authViewModel.checkAuthStatus()
             hasCheckedAuth = true
         }
@@ -49,54 +49,54 @@ fun SplashScreen(
 
     // ✅ Mostrar biometría cuando sea necesario (separado de navegación)
     LaunchedEffect(isInitialized, isLoggedIn, biometricEnabled) {
-        Log.d("DebugDev", "🎯 SplashScreen: Estado - isInitialized=$isInitialized, isLoggedIn=$isLoggedIn, biometricEnabled=$biometricEnabled, biometricAttempted=$biometricAttempted, biometricPassed=$biometricPassed")
+        Log.d("ArcheryScore_Debug", "🎯 SplashScreen: Estado - isInitialized=$isInitialized, isLoggedIn=$isLoggedIn, biometricEnabled=$biometricEnabled, biometricAttempted=$biometricAttempted, biometricPassed=$biometricPassed")
         
         if (isInitialized && isLoggedIn && biometricEnabled && !biometricAttempted) {
-            Log.d("DebugDev", "🔐 SplashScreen: NECESITA BIOMETRÍA")
+            Log.d("ArcheryScore_Debug", "🔐 SplashScreen: NECESITA BIOMETRÍA")
             val activity = context as? FragmentActivity
             if (activity != null && BiometricAuth.canAuthenticate(context)) {
                 biometricAttempted = true
-                Log.d("DebugDev", "🔐 SplashScreen: Mostrando prompt biométrico...")
+                Log.d("ArcheryScore_Debug", "🔐 SplashScreen: Mostrando prompt biométrico...")
                 BiometricAuth.authenticate(
                     activity = activity,
                     title = "Desbloquear Manos Locales",
                     subtitle = "Usa huella o Face para continuar",
                     onSuccess = {
-                        Log.d("DebugDev", "✅ SplashScreen: Biometría exitosa")
+                        Log.d("ArcheryScore_Debug", "✅ SplashScreen: Biometría exitosa")
                         biometricPassed = true
                         lastBiometricError = null
                     },
                     onError = { err ->
-                        Log.e("DebugDev", "❌ SplashScreen: Error biométrico - $err")
+                        Log.e("ArcheryScore_Debug", "❌ SplashScreen: Error biométrico - $err")
                         lastBiometricError = err
                     },
                     onFail = {
-                        Log.w("DebugDev", "⚠️ SplashScreen: Biometría cancelada, reintento disponible")
+                        Log.w("ArcheryScore_Debug", "⚠️ SplashScreen: Biometría cancelada, reintento disponible")
                     }
                 )
             } else {
-                Log.w("DebugDev", "⚠️ SplashScreen: BiometricAuth no disponible, saltando")
+                Log.w("ArcheryScore_Debug", "⚠️ SplashScreen: BiometricAuth no disponible, saltando")
                 biometricPassed = true
             }
         } else if (isInitialized && isLoggedIn && !biometricEnabled) {
-            Log.d("DebugDev", "✅ SplashScreen: Biometría DESHABILITADA, permitir entrada")
+            Log.d("ArcheryScore_Debug", "✅ SplashScreen: Biometría DESHABILITADA, permitir entrada")
         }
     }
 
     // ✅ NAVEGAR cuando esté todo listo
     LaunchedEffect(isInitialized, isLoggedIn, biometricEnabled, biometricPassed, biometricAttempted) {
         if (isInitialized && !hasNavigated) {
-            Log.d("DebugDev", "🎯 SplashScreen (NAVEGACIÓN): isInitialized=$isInitialized, isLoggedIn=$isLoggedIn, biometricEnabled=$biometricEnabled, biometricPassed=$biometricPassed, biometricAttempted=$biometricAttempted")
+            Log.d("ArcheryScore_Debug", "🎯 SplashScreen (NAVEGACIÓN): isInitialized=$isInitialized, isLoggedIn=$isLoggedIn, biometricEnabled=$biometricEnabled, biometricPassed=$biometricPassed, biometricAttempted=$biometricAttempted")
             
             // Si necesita biometría pero aún no la intentó, esperar
             if (isLoggedIn && biometricEnabled && !biometricAttempted) {
-                Log.d("DebugDev", "⏳ SplashScreen: Esperando intento de biometría...")
+                Log.d("ArcheryScore_Debug", "⏳ SplashScreen: Esperando intento de biometría...")
                 return@LaunchedEffect
             }
 
             // Si necesita biometría y no pasó, no navegar
             if (isLoggedIn && biometricEnabled && !biometricPassed) {
-                Log.d("DebugDev", "🔒 SplashScreen: Biometría requerida pero no pasada, esperando reintento...")
+                Log.d("ArcheryScore_Debug", "🔒 SplashScreen: Biometría requerida pero no pasada, esperando reintento...")
                 return@LaunchedEffect
             }
 
@@ -105,7 +105,7 @@ fun SplashScreen(
 
             hasNavigated = true
             val destination = if (isLoggedIn) Screen.Feed.route else Screen.Access.route
-            Log.d("DebugDev", "➡️ SplashScreen: Navegando a $destination")
+            Log.d("ArcheryScore_Debug", "➡️ SplashScreen: Navegando a $destination")
             navController.navigate(destination) {
                 popUpTo(Screen.Splash.route) { inclusive = true }
                 launchSingleTop = true
@@ -117,7 +117,7 @@ fun SplashScreen(
     LaunchedEffect(Unit) {
         delay(5000) // Aumentado timeout a 5 segundos
         if (!hasNavigated) {
-            Log.w("DebugDev", "⏰ SplashScreen: Timeout, navegando a Access")
+            Log.w("ArcheryScore_Debug", "⏰ SplashScreen: Timeout, navegando a Access")
             hasNavigated = true
             navController.navigate(Screen.Access.route) {
                 popUpTo(Screen.Splash.route) { inclusive = true }

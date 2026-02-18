@@ -72,7 +72,7 @@ fun SettingsScreen(
 
     LaunchedEffect(errorMessage) {
         if (errorMessage != null) {
-            Log.d("DebugDev", "📢 SettingsScreen: Mostrando error al usuario: $errorMessage")
+            Log.d("ArcheryScore_Debug", "📢 SettingsScreen: Mostrando error al usuario: $errorMessage")
             scope.launch {
                 snackbarHostState.showSnackbar(errorMessage!!)
                 settingsViewModel.clearError()
@@ -355,17 +355,17 @@ fun SettingsScreen(
                                         title = "Desactivar desbloqueo biométrico",
                                         subtitle = "Confirma tu identidad",
                                         onSuccess = {
-                                            Log.d("DebugDev", "✅ Biometría confirmada, deshabilitando")
+                                            Log.d("ArcheryScore_Debug", "✅ Biometría confirmada, deshabilitando")
                                             settingsViewModel.setBiometricEnabled(false)
                                         },
                                         onError = { err ->
-                                            Log.e("DebugDev", "❌ Error biométrico al deshabilitar: $err")
+                                            Log.e("ArcheryScore_Debug", "❌ Error biométrico al deshabilitar: $err")
                                             scope.launch {
                                                 snackbarHostState.showSnackbar("No se pudo confirmar identidad")
                                             }
                                         },
                                         onFail = {
-                                            Log.w("DebugDev", "⚠️ Biometría cancelada al deshabilitar")
+                                            Log.w("ArcheryScore_Debug", "⚠️ Biometría cancelada al deshabilitar")
                                         }
                                     )
                                 } else {

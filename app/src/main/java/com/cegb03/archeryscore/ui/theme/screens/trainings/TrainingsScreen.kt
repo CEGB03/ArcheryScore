@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -70,6 +71,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -101,17 +103,24 @@ import com.cegb03.archeryscore.viewmodel.TrainingsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 @Composable
 fun TrainingsScreen(
     modifier: Modifier = Modifier,
     viewModel: TrainingsViewModel = hiltViewModel(),
-    authViewModel: AuthViewModel = hiltViewModel()
+    authViewModel: AuthViewModel = hiltViewModel(),
+    onDetailOpenChanged: (Boolean) -> Unit = {}
 ) {
     val trainings by viewModel.trainings.collectAsState()
     val trainingDetail by viewModel.trainingDetail.collectAsState()
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+
+    // Notificar cuando se abre o cierra un detalle
+    LaunchedEffect(trainingDetail) {
+        onDetailOpenChanged(trainingDetail != null)
+    }
 
     Log.d("ArcheryScore_Debug", "Recompose - trainings: ${trainings.size}, trainingDetail: ${trainingDetail != null}, isLoggedIn: $isLoggedIn")
 
@@ -288,8 +297,14 @@ private fun TrainingDetailScreen(
     Log.d("ArcheryScore_Debug", "TrainingDetailScreen called - detail: ${detail != null}, training: ${detail?.training != null}, ends: ${detail?.ends?.size ?: 0}")
     val training = detail?.training
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    var targetSheetPage by rememberSaveable { mutableIntStateOf(-1) } // Página destino para la planilla
 
     var showInfoMenu by remember { mutableStateOf(false) }
+
+    // Manejar el back button del sistema en la planilla
+    BackHandler {
+        onBack()
+    }
 
     Scaffold(
         topBar = {
@@ -400,12 +415,21 @@ private fun TrainingDetailScreen(
                         detail = detail,
                         targetZoneCount = training.targetZoneCount,
                         puntajeSystem = training.puntajeSystem,
-                        onConfirmEnd = onConfirmEnd
+                        onConfirmEnd = onConfirmEnd,
+                        onSwitchToStats = { selectedTabIndex = 1 },
+                        targetPage = targetSheetPage,
+                        onPageChanged = { targetSheetPage = -1 } // Resetear después de usarlo
                     )
                 }
                 1 -> {
                     Log.d("ArcheryScore_Debug", "Rendering TrainingStatsTab")
-                    TrainingStatsTab(detail = detail)
+                    TrainingStatsTab(
+                        detail = detail,
+                        onSwitchToPlanilla = { 
+                            targetSheetPage = detail.ends.size - 1 // Ir a la última tanda
+                            selectedTabIndex = 0 
+                        }
+                    )
                 }
             }
         }
@@ -418,7 +442,10 @@ private fun TrainingSheetTab(
     detail: TrainingWithEnds,
     targetZoneCount: Int,
     puntajeSystem: String,
-    onConfirmEnd: (Long, String, Int) -> Unit
+    onConfirmEnd: (Long, String, Int) -> Unit,
+    onSwitchToStats: () -> Unit = {},
+    targetPage: Int = -1,
+    onPageChanged: () -> Unit = {}
 ) {
     Log.d("ArcheryScore_Debug", "TrainingSheetTab - training: ${training.id}, ends: ${detail.ends.size}, zones: $targetZoneCount, system: $puntajeSystem")
     
@@ -443,7 +470,49 @@ private fun TrainingSheetTab(
     // Usar el número actual de tandas para pageCount
     val totalEnds = detail.ends.size
     Log.d("ArcheryScore_Debug", "Creating pagerState with totalEnds: $totalEnds")
-    val pagerState = rememberPagerState(pageCount = { totalEnds })
+    val pagerState = rememberPagerState(
+        pageCount = { totalEnds },
+        initialPage = if (targetPage >= 0 && targetPage < totalEnds) targetPage else 0
+    )
+
+    // Estado para controlar el swipe
+    var hasTriggeredSwitch by remember { mutableStateOf(false) }
+
+    // Navegar a targetPage si está configurado
+    LaunchedEffect(targetPage) {
+        if (targetPage >= 0 && targetPage < totalEnds) {
+            pagerState.scrollToPage(targetPage)
+            onPageChanged()
+            hasTriggeredSwitch = false // Resetear al cambiar de página
+        }
+    }
+
+    // Resetear el flag cuando cambiamos de página
+    LaunchedEffect(pagerState.settledPage) {
+        hasTriggeredSwitch = false
+    }
+
+    // Detectar intento de swipe más allá de la última página
+    LaunchedEffect(pagerState) {
+        snapshotFlow { 
+            Triple(
+                pagerState.settledPage, 
+                pagerState.currentPageOffsetFraction,
+                pagerState.isScrollInProgress
+            ) 
+        }.collect { (settledPage, offsetFraction, isScrolling) ->
+            // Solo detectar si estamos ASENTADOS en la última página e intentamos ir más allá
+            if (!hasTriggeredSwitch &&
+                settledPage == totalEnds - 1 && 
+                isScrolling &&
+                offsetFraction < -0.5f) {
+                
+                Log.d("ArcheryScore_Debug", "Detectado swipe al final (settledPage: $settledPage, offset: $offsetFraction), cambiando a Estadísticas")
+                hasTriggeredSwitch = true
+                onSwitchToStats()
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -787,98 +856,141 @@ private fun TrainingSheetTab(
 }
 
 @Composable
-private fun TrainingStatsTab(detail: TrainingWithEnds) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        // Estadísticas por tanda
-        item {
-            Text("Por tanda", style = MaterialTheme.typography.titleMedium)
-        }
+private fun TrainingStatsTab(
+    detail: TrainingWithEnds,
+    onSwitchToPlanilla: () -> Unit = {}
+) {
+    var swipeOffsetX by remember { mutableStateOf(0f) }
+    var swipeOffsetY by remember { mutableStateOf(0f) }
+    var isHorizontalSwipe by remember { mutableStateOf(false) }
 
-        items(detail.ends) { end ->
-            if (end.confirmedAt != null) {
-                val endScores = parseScores(end.scoresText.orEmpty())
-                if (endScores.isNotEmpty()) {
-                    val endTotal = endScores.sumOf { it.score }
-                    val endAverage = endTotal.toDouble() / endScores.size
-                    val endXCount = endScores.count { it.isX }
-                    val endTenCount = endScores.count { it.score == 10 && !it.isX }
-                    val endNineCount = endScores.count { it.score == 9 }
-                    val endMissCount = endScores.count { it.isMiss }
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Tanda ${end.endNumber}", style = MaterialTheme.typography.titleSmall)
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Total: $endTotal")
-                                Text("Promedio: ${"%.2f".format(endAverage)}")
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = {
+                        swipeOffsetX = 0f
+                        swipeOffsetY = 0f
+                        isHorizontalSwipe = false
+                    },
+                    onDragEnd = {
+                        // Si el swipe fue hacia la derecha, suficientemente largo y más horizontal que vertical
+                        if (isHorizontalSwipe && swipeOffsetX > 200f) {
+                            Log.d("ArcheryScore_Debug", "Detectado swipe horizontal hacia la derecha en Estadísticas (x: $swipeOffsetX, y: $swipeOffsetY), volviendo a Planilla")
+                            onSwitchToPlanilla()
+                        }
+                        swipeOffsetX = 0f
+                        swipeOffsetY = 0f
+                        isHorizontalSwipe = false
+                    },
+                    onDrag = { change, dragAmount ->
+                        swipeOffsetX += dragAmount.x
+                        swipeOffsetY += abs(dragAmount.y)
+                        
+                        // Determinar si es un swipe horizontal después de los primeros movimientos
+                        if (abs(swipeOffsetX) > 30f || swipeOffsetY > 30f) {
+                            if (abs(swipeOffsetX) > swipeOffsetY * 1.5f) {
+                                isHorizontalSwipe = true
+                                change.consume()
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                                Text("X: $endXCount")
-                                Text("10: $endTenCount")
-                                Text("9: $endNineCount")
-                                Text("M: $endMissCount")
+                        }
+                    }
+                )
+            }
+    ) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Estadísticas por tanda
+            item {
+                Text("Por tanda", style = MaterialTheme.typography.titleMedium)
+            }
+
+            items(detail.ends) { end ->
+                if (end.confirmedAt != null) {
+                    val endScores = parseScores(end.scoresText.orEmpty())
+                    if (endScores.isNotEmpty()) {
+                        val endTotal = endScores.sumOf { it.score }
+                        val endAverage = endTotal.toDouble() / endScores.size
+                        val endXCount = endScores.count { it.isX }
+                        val endTenCount = endScores.count { it.score == 10 && !it.isX }
+                        val endNineCount = endScores.count { it.score == 9 }
+                        val endMissCount = endScores.count { it.isMiss }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("Tanda ${end.endNumber}", style = MaterialTheme.typography.titleSmall)
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Text("Total: $endTotal")
+                                    Text("Promedio: ${"%.2f".format(endAverage)}")
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                                    Text("X: $endXCount")
+                                    Text("10: $endTenCount")
+                                    Text("9: $endNineCount")
+                                    Text("M: $endMissCount")
+                                }
                             }
                         }
                     }
                 }
             }
-        }
 
-        // Separador visual
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-        }
+            // Separador visual
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-        // Estadísticas generales
-        item {
-            Text("Estadísticas generales", style = MaterialTheme.typography.titleMedium)
-        }
+            // Estadísticas generales
+            item {
+                Text("Estadísticas generales", style = MaterialTheme.typography.titleMedium)
+            }
 
-        item {
-            val parsedScores = detail.ends.flatMap { parseScores(it.scoresText.orEmpty()) }
-            val totalArrows = parsedScores.size
-            val totalScore = parsedScores.sumOf { it.score }
-            val average = if (totalArrows == 0) 0.0 else totalScore.toDouble() / totalArrows
-            val xCount = parsedScores.count { it.isX }
-            val tenCount = parsedScores.count { it.score == 10 && !it.isX }
-            val nineCount = parsedScores.count { it.score == 9 }
-            val missCount = parsedScores.count { it.isMiss }
-            val confirmedEnds = detail.ends.count { it.confirmedAt != null }
+            item {
+                val parsedScores = detail.ends.flatMap { parseScores(it.scoresText.orEmpty()) }
+                val totalArrows = parsedScores.size
+                val totalScore = parsedScores.sumOf { it.score }
+                val average = if (totalArrows == 0) 0.0 else totalScore.toDouble() / totalArrows
+                val xCount = parsedScores.count { it.isX }
+                val tenCount = parsedScores.count { it.score == 10 && !it.isX }
+                val nineCount = parsedScores.count { it.score == 9 }
+                val missCount = parsedScores.count { it.isMiss }
+                val confirmedEnds = detail.ends.count { it.confirmedAt != null }
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Tandas completadas: $confirmedEnds")
-                        Text("Total flechas: $totalArrows")
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Puntuación total: $totalScore")
-                        Text("Promedio: ${"%.2f".format(average)}")
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        Text("X: $xCount")
-                        Text("10: $tenCount")
-                        Text("9: $nineCount")
-                        Text("M: $missCount")
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Tandas completadas: $confirmedEnds")
+                            Text("Total flechas: $totalArrows")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text("Puntuación total: $totalScore")
+                            Text("Promedio: ${"%.2f".format(average)}")
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            Text("X: $xCount")
+                            Text("10: $tenCount")
+                            Text("9: $nineCount")
+                            Text("M: $missCount")
+                        }
                     }
                 }
             }
-        }
-    }
+        } // Cierre del LazyColumn
+    } // Cierre del Box
 }
 
 private data class ParsedScore(

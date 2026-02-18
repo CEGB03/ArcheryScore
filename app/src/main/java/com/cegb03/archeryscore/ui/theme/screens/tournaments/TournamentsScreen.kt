@@ -20,7 +20,10 @@ import com.cegb03.archeryscore.data.model.Tournament
 import com.cegb03.archeryscore.viewmodel.TournamentViewModel
 
 @Composable
-fun TournamentsScreen(modifier: Modifier = Modifier) {
+fun TournamentsScreen(
+    modifier: Modifier = Modifier,
+    onDetailOpenChanged: (Boolean) -> Unit = {}
+) {
     Log.d("ArcheryScore_Debug", "🎯 TournamentsScreen - Composable iniciado")
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     val tabs = listOf("Próximos Torneos", "Torneos Participados")
@@ -38,8 +41,8 @@ fun TournamentsScreen(modifier: Modifier = Modifier) {
         
         Box(modifier = Modifier.fillMaxSize()) {
             when (selectedTabIndex) {
-                0 -> ProximosTorneosTab()
-                1 -> TorneosParticipadosTab()
+                0 -> ProximosTorneosTab(onDetailOpenChanged = onDetailOpenChanged)
+                1 -> TorneosParticipadosTab(onDetailOpenChanged = onDetailOpenChanged)
             }
         }
     }
@@ -47,7 +50,10 @@ fun TournamentsScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun ProximosTorneosTab(viewModel: TournamentViewModel = hiltViewModel()) {
+fun ProximosTorneosTab(
+    viewModel: TournamentViewModel = hiltViewModel(),
+    onDetailOpenChanged: (Boolean) -> Unit = {}
+) {
     Log.d("ArcheryScore_Debug", "🎯 ProximosTorneosTab - Composable iniciado")
     val tournaments by viewModel.tournaments.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -55,6 +61,11 @@ fun ProximosTorneosTab(viewModel: TournamentViewModel = hiltViewModel()) {
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     var detailType by rememberSaveable { mutableStateOf(TournamentDetailType.NONE) }
     var detailUrl by rememberSaveable { mutableStateOf("") }
+    
+    // Notificar cuando se abre o cierra un detalle
+    LaunchedEffect(detailType) {
+        onDetailOpenChanged(detailType != TournamentDetailType.NONE)
+    }
     
     // Cargar torneos cuando el composable se monta
     LaunchedEffect(Unit) {
@@ -244,14 +255,117 @@ private enum class TournamentDetailType {
 }
 
 @Composable
-fun TorneosParticipadosTab() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Torneos Participados")
+fun TorneosParticipadosTab(
+    viewModel: TournamentViewModel = hiltViewModel(),
+    onDetailOpenChanged: (Boolean) -> Unit = {}
+) {
+    Log.d("ArcheryScore_Debug", "🎯 TorneosParticipadosTab - Composable iniciado")
+    val tournaments by viewModel.tournaments.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    var detailType by rememberSaveable { mutableStateOf(TournamentDetailType.NONE) }
+    var detailUrl by rememberSaveable { mutableStateOf("") }
+    
+    // Notificar cuando se abre o cierra un detalle
+    LaunchedEffect(detailType) {
+        onDetailOpenChanged(detailType != TournamentDetailType.NONE)
+    }
+    
+    // Cargar torneos cuando el composable se monta
+    LaunchedEffect(Unit) {
+        Log.d("ArcheryScore_Debug", "🔄 TorneosParticipadosTab - LaunchedEffect ejecutado")
+        // TODO: Llamar a viewModel.loadParticipatedTournaments() cuando esté disponible
+        Log.d("ArcheryScore_Debug", "✅ TorneosParticipadosTab - Preparado para cargar torneos participados")
+    }
+    
+    when (detailType) {
+        TournamentDetailType.PARTICIPANTS -> {
+            ParticipantsScreen(
+                url = detailUrl,
+                onClose = { detailType = TournamentDetailType.NONE }
+            )
+        }
+        TournamentDetailType.INVITATION -> {
+            InvitationScreen(
+                url = detailUrl,
+                onClose = { detailType = TournamentDetailType.NONE }
+            )
+        }
+        TournamentDetailType.NONE -> {
+        Box(modifier = Modifier.fillMaxSize()) {
+            when {
+                isLoading -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Cargando torneos participados...")
+                    }
+                }
+                errorMessage != null -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = errorMessage ?: "Error desconocido",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(onClick = { 
+                            // TODO: Llamar a loadParticipatedTournaments() cuando esté disponible
+                            Log.d("ArcheryScore_Debug", "🔄 TorneosParticipadosTab - Reintentando cargar")
+                        }) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Reintentar")
+                        }
+                    }
+                }
+                tournaments.isEmpty() -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Aún no has participado en ningún torneo")
+                    }
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        state = listState,
+                        contentPadding = PaddingValues(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 120.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(tournaments) { tournament ->
+                            TournamentCard(
+                                tournament = tournament,
+                                onOpenParticipants = {
+                                    detailUrl = it
+                                    detailType = TournamentDetailType.PARTICIPANTS
+                                },
+                                onOpenInvitation = {
+                                    detailUrl = it
+                                    detailType = TournamentDetailType.INVITATION
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        }
     }
 }
