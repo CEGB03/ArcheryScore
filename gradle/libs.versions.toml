@@ -64,11 +64,10 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 com-google-android-gms-play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
-# Supabase - Via Jitpack (GitHub) - single library load
-io-github-jan-tennert-supabase-bom = { group = "com.github.jan-tennert", name = "supabase-kt", version = "2.3.1" }
-io-github-jan-tennert-supabase-postgrest = { group = "com.github.jan-tennert", name = "supabase-kt", version = "2.3.1" }
-io-github-jan-tennert-supabase-realtime = { group = "com.github.jan-tennert", name = "supabase-kt", version = "2.3.1" }
-io-github-jan-tennert-supabase-gotrue = { group = "com.github.jan-tennert", name = "supabase-kt", version = "2.3.1" }
+# Supabase - Maven Central (official)
+io-github-jan-tennert-supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt", version.ref = "supabase" }
+io-github-jan-tennert-supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime-kt", version.ref = "supabase" }
+io-github-jan-tennert-supabase-gotrue = { group = "io.github.jan-tennert.supabase", name = "gotrue-kt", version.ref = "supabase" }
 # Ktor
 io-ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
 io-ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }

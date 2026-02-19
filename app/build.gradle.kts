@@ -108,10 +108,10 @@ dependencies {
     // Location (weather)
     implementation(libs.com.google.android.gms.play.services.location)
     
-    // Supabase 2.3.1 - Modules (comentado temporalmente - investigar integración)
-    // implementation(libs.io.github.jan.tennert.supabase.postgrest)
-    // implementation(libs.io.github.jan.tennert.supabase.realtime)
-    // implementation(libs.io.github.jan.tennert.supabase.gotrue)
+    // Supabase 2.3.1 - Maven Central
+    implementation(libs.io.github.jan.tennert.supabase.postgrest)
+    implementation(libs.io.github.jan.tennert.supabase.realtime)
+    implementation(libs.io.github.jan.tennert.supabase.gotrue)
     
     // Ktor (requerido por Supabase)
     implementation(libs.io.ktor.client.android)
