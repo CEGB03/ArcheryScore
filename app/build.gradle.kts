@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt.android)
     kotlin("kapt")
     id("com.google.gms.google-services")
@@ -22,6 +23,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // 🔐 Credenciales de Supabase desde local.properties (GITIGNORED)
+        val supabaseUrl = project.findProperty("SUPABASE_URL") as String? ?: "https://CONFIGURAR_EN_LOCAL_PROPERTIES"
+        val supabaseAnonKey = project.findProperty("SUPABASE_ANON_KEY") as String? ?: "CONFIGURAR_EN_LOCAL_PROPERTIES"
+        
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
     }
 
     buildTypes {
@@ -42,6 +50,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -98,6 +107,19 @@ dependencies {
 
     // Location (weather)
     implementation(libs.com.google.android.gms.play.services.location)
+    
+    // Supabase 2.3.1 - Modules (comentado temporalmente - investigar integración)
+    // implementation(libs.io.github.jan.tennert.supabase.postgrest)
+    // implementation(libs.io.github.jan.tennert.supabase.realtime)
+    // implementation(libs.io.github.jan.tennert.supabase.gotrue)
+    
+    // Ktor (requerido por Supabase)
+    implementation(libs.io.ktor.client.android)
+    implementation(libs.io.ktor.client.content.negotiation)
+    implementation(libs.io.ktor.serialization.kotlinx.json)
+    
+    // Kotlinx Serialization
+    implementation(libs.org.jetbrains.kotlinx.serialization.json)
     
     // Firebase
     implementation(platform(libs.com.google.firebase.bom))

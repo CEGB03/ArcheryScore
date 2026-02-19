@@ -13,3 +13,23 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# 🔒 Archivos sensibles con credenciales (NUNCA commitear)
+app/google-services.json
+local.properties
+
+app/google-services.json.example
+local.properties.example
+
+# Firebase & Supabase credentials
+*.google-services.json
+*.private.properties
+
+# md utiles
+MIGRATION_SUMMARY.md
+QUICK_START.md
+SUPABASE_SETUP.md
+CREDENTIALS_SETUP.md
+app/CREDENCIALES.md
+SUPABASE_INTEGRATION_STATUS.md
+

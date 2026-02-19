@@ -21,6 +21,9 @@ pdfbox = "2.0.27.0"
 foundationLayout = "1.10.3"
 room = "2.6.1"
 playServicesLocation = "21.3.0"
+supabase = "2.3.1"
+ktor = "2.3.12"
+kotlinxSerialization = "1.6.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -61,11 +64,23 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 com-google-android-gms-play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+# Supabase - Via Jitpack (GitHub) - single library load
+io-github-jan-tennert-supabase-bom = { group = "com.github.jan-tennert", name = "supabase-kt", version = "2.3.1" }
+io-github-jan-tennert-supabase-postgrest = { group = "com.github.jan-tennert", name = "supabase-kt", version = "2.3.1" }
+io-github-jan-tennert-supabase-realtime = { group = "com.github.jan-tennert", name = "supabase-kt", version = "2.3.1" }
+io-github-jan-tennert-supabase-gotrue = { group = "com.github.jan-tennert", name = "supabase-kt", version = "2.3.1" }
+# Ktor
+io-ktor-client-android = { group = "io.ktor", name = "ktor-client-android", version.ref = "ktor" }
+io-ktor-client-content-negotiation = { group = "io.ktor", name = "ktor-client-content-negotiation", version.ref = "ktor" }
+io-ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serialization-kotlinx-json", version.ref = "ktor" }
+# Kotlinx Serialization
+org-jetbrains-kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 hilt-android = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 
