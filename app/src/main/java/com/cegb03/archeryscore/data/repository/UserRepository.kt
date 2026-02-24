@@ -2,6 +2,7 @@ package com.cegb03.archeryscore.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.cegb03.archeryscore.data.model.FatarcoArcherData
 import com.cegb03.archeryscore.data.model.User
 import com.cegb03.archeryscore.data.remote.supabase.repository.SupabaseAuthRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -86,7 +87,10 @@ class UserRepository @Inject constructor(
                     email = profile.email,
                     password = "",
                     tel = profile.tel ?: "",
-                    role = profile.role.firstOrNull() ?: "arquero"
+                    documento = profile.documento,
+                    club = profile.club,
+                    fechaNacimiento = profile.fechaNacimiento,
+                    roles = profile.role
                 )
             } else {
                 Log.w("ArcheryScore_Debug", "No hay perfil en Supabase")
@@ -105,7 +109,11 @@ class UserRepository @Inject constructor(
         return try {
             val result = supabaseAuthRepo.updateProfile(
                 username = user.username.takeIf { it.isNotBlank() },
-                tel = user.tel.takeIf { it.isNotBlank() }
+                tel = user.tel.takeIf { it.isNotBlank() },
+                documento = user.documento?.takeIf { it.isNotBlank() },
+                club = user.club?.takeIf { it.isNotBlank() },
+                fechaNacimiento = user.fechaNacimiento?.takeIf { it.isNotBlank() },
+                roles = user.roles.takeIf { it.isNotEmpty() }
             )
 
             if (result.isSuccess) {
@@ -119,7 +127,10 @@ class UserRepository @Inject constructor(
                         email = profile.email,
                         password = "",
                         tel = profile.tel ?: "",
-                        role = profile.role.firstOrNull() ?: "arquero"
+                        documento = profile.documento,
+                        club = profile.club,
+                        fechaNacimiento = profile.fechaNacimiento,
+                        roles = profile.role
                     )
                 } else {
                     null
@@ -131,6 +142,56 @@ class UserRepository @Inject constructor(
         } catch (e: Exception) {
             Log.e("ArcheryScore_Debug", "Excepción al actualizar en Supabase", e)
             null
+        }
+    }
+
+    /**
+     * Actualiza el perfil con datos de FATARCO (nombre, documento y roles).
+     */
+    suspend fun updateUserFromFatarco(data: FatarcoArcherData): User? {
+        return try {
+            val result = supabaseAuthRepo.updateProfile(
+                username = data.nombre.takeIf { it.isNotBlank() },
+                documento = data.dni.takeIf { it.isNotBlank() },
+                club = data.club.takeIf { it.isNotBlank() },
+                fechaNacimiento = data.fechaNacimiento.takeIf { it.isNotBlank() },
+                roles = data.estados.distinct()
+            )
+
+            if (result.isSuccess) {
+                val profile = result.getOrNull()
+                if (profile != null) {
+                    User(
+                        id = null,
+                        username = profile.username,
+                        email = profile.email,
+                        password = "",
+                        tel = profile.tel ?: "",
+                        documento = profile.documento,
+                        club = profile.club,
+                        fechaNacimiento = profile.fechaNacimiento,
+                        roles = profile.role
+                    )
+                } else {
+                    null
+                }
+            } else {
+                Log.w("ArcheryScore_Debug", "Error al actualizar desde FATARCO: ${result.exceptionOrNull()?.message}")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("ArcheryScore_Debug", "Excepcion al actualizar desde FATARCO", e)
+            null
+        }
+    }
+
+    suspend fun saveFatarcoProfile(data: FatarcoArcherData): Boolean {
+        return try {
+            val result = supabaseAuthRepo.upsertFatarcoProfile(data)
+            result.isSuccess
+        } catch (e: Exception) {
+            Log.e("ArcheryScore_Debug", "Error guardando FATARCO profile", e)
+            false
         }
     }
     

@@ -8,7 +8,10 @@ data class User (
     val id: Int? = null,
     val username: String,
     val password: String? = null,
-    val role: String = "client", // Valor predeterminado
     val email: String,
-    val tel: String = ""
+    val tel: String = "",
+    val documento: String? = null,
+    val club: String? = null,
+    val fechaNacimiento: String? = null,
+    val roles: List<String> = listOf("arquero")
 ): Parcelable

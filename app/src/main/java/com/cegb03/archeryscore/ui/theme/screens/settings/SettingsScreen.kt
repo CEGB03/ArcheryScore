@@ -47,15 +47,25 @@ fun SettingsScreen(
     val user by settingsViewModel.user.collectAsState()
     val changePasswordResult by settingsViewModel.changePasswordResult.collectAsState()
     val fatarcoVerificationResult by settingsViewModel.fatarcoVerificationResult.collectAsState()
+    val fatarcoEnabled by settingsViewModel.fatarcoEnabled.collectAsState(initial = true)
 
     var showChangePasswordDialog by remember { mutableStateOf(false) }
     var showFatarcoVerifyDialog by remember { mutableStateOf(false) }
     var showFatarcoResultDialog by remember { mutableStateOf(false) }
+    var showFatarcoMergeDialog by remember { mutableStateOf(false) }
     var fatarcoDni by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf<String?>(null) }
     var showPassword by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(0) }
+    val screenTitle = if (selectedTab == 0) "Perfil" else "Ajustes"
+
+    var useFatarcoNombre by remember { mutableStateOf(false) }
+    var useFatarcoDocumento by remember { mutableStateOf(false) }
+    var useFatarcoClub by remember { mutableStateOf(false) }
+    var useFatarcoFechaNacimiento by remember { mutableStateOf(false) }
+    var useFatarcoRoles by remember { mutableStateOf(false) }
 
     // Gate biométrico al abrir Configuración (si está habilitado y disponible)
     val context = LocalContext.current
@@ -91,7 +101,7 @@ fun SettingsScreen(
             snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
             topBar = {
                 TopAppBar(
-                    title = { Text("Configuración") },
+                    title = { Text(screenTitle) },
                     navigationIcon = {
                         IconButton(onClick = { navController.popBackStack() }) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
@@ -165,7 +175,18 @@ fun SettingsScreen(
     // Resultado de verificación FATARCO
     LaunchedEffect(fatarcoVerificationResult) {
         fatarcoVerificationResult?.let { result ->
-            showFatarcoResultDialog = true
+            if (result is com.cegb03.archeryscore.data.model.FatarcoVerificationResult.Success) {
+                val data = result.data
+                val currentUser = user
+                useFatarcoNombre = currentUser?.username.isNullOrBlank() || currentUser?.username != data.nombre
+                useFatarcoDocumento = currentUser?.documento.isNullOrBlank() || currentUser?.documento != data.dni
+                useFatarcoClub = currentUser?.club.isNullOrBlank() || currentUser?.club != data.club
+                useFatarcoFechaNacimiento = currentUser?.fechaNacimiento.isNullOrBlank() || currentUser?.fechaNacimiento != data.fechaNacimiento
+                useFatarcoRoles = currentUser?.roles.isNullOrEmpty() || currentUser?.roles?.sorted() != data.estados.sorted()
+                showFatarcoMergeDialog = true
+            } else {
+                showFatarcoResultDialog = true
+            }
         }
     }
 
@@ -173,7 +194,7 @@ fun SettingsScreen(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Configuración") },
+                title = { Text(screenTitle) },
                 colors = TopAppBarDefaults.topAppBarColors()
             )
         }
@@ -188,254 +209,311 @@ fun SettingsScreen(
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
-                // Cuenta editable
-                Text(text = "Cuenta", style = MaterialTheme.typography.headlineSmall)
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (user != null) {
-                    var isEditing by remember { mutableStateOf(false) }
-                    var editedUsername by remember { mutableStateOf(user!!.username) }
-                    var editedTel by remember { mutableStateOf(user!!.tel) }
-                    var fieldError by remember { mutableStateOf<String?>(null) }
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            if (isEditing) {
-                                OutlinedTextField(
-                                    value = editedUsername,
-                                    onValueChange = { editedUsername = it },
-                                    label = { Text("Nombre de usuario") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                Text(text = "Email", style = MaterialTheme.typography.labelMedium)
-                                Text(
-                                    text = user!!.email,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 4.dp)
-                                )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedTextField(
-                                    value = editedTel,
-                                    onValueChange = { editedTel = it },
-                                    label = { Text("Teléfono") },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                                fieldError?.let {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = it,
-                                        color = MaterialTheme.colorScheme.error,
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Button(
-                                        onClick = {
-                                            fieldError = when {
-                                                editedUsername.isBlank() -> "El nombre de usuario no puede estar vacío"
-                                                else -> null
-                                            }
-                                            if (fieldError == null) {
-                                                val updatedUser = user!!.copy(
-                                                    username = editedUsername,
-                                                    tel = editedTel
-                                                )
-                                                val proceedUpdate: () -> Unit = {
-                                                    settingsViewModel.updateUser(updatedUser)
-                                                    isEditing = false
-                                                }
-                                                if (biometricRequired && activity != null) {
-                                                    BiometricAuth.authenticate(
-                                                        activity = activity,
-                                                        title = "Confirmar cambios",
-                                                        subtitle = "Autoriza con huella o Face",
-                                                        onSuccess = { proceedUpdate() },
-                                                        onError = { err -> scope.launch { snackbarHostState.showSnackbar("Autenticación fallida: $err") } },
-                                                        onFail = { }
-                                                    )
-                                                } else {
-                                                    proceedUpdate()
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("Guardar")
-                                    }
-                                    OutlinedButton(
-                                        onClick = {
-                                            editedUsername = user!!.username
-                                            editedTel = user!!.tel
-                                            fieldError = null
-                                            isEditing = false
-                                        },
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Text("Cancelar")
-                                    }
-                                }
-                            } else {
-                                Text(
-                                    text = user!!.username.ifBlank { "Nombre no disponible" },
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = user!!.email,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                                if (user!!.tel.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(text = user!!.tel, style = MaterialTheme.typography.bodyMedium)
-                                }
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Button(onClick = { isEditing = true }) {
-                                    Text("Editar datos")
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    Text("No se pudo cargar la información del usuario", color = MaterialTheme.colorScheme.error)
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Preferencias
-                Text(text = "Preferencias", style = MaterialTheme.typography.headlineSmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Notificaciones")
-                    Switch(
-                        checked = notificationsEnabled,
-                        onCheckedChange = { enabled ->
-                            settingsViewModel.setNotificationsEnabled(enabled)
-                        }
+                TabRow(selectedTabIndex = selectedTab) {
+                    Tab(
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
+                        text = { Text("Perfil") }
+                    )
+                    Tab(
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
+                        text = { Text("Ajustes") }
                     )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Seguridad
-                Text(text = "Seguridad", style = MaterialTheme.typography.headlineSmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                // Toggle biometría
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Desbloqueo biométrico")
-                    Switch(
-                        checked = biometricEnabled,
-                        onCheckedChange = { enabled ->
-                            // Si se intenta deshabilitar (enabled=false) y actualmente está habilitado (biometricEnabled=true)
-                            if (!enabled && biometricEnabled) {
-                                // Solicitar biometría antes de deshabilitar
-                                if (activity != null && BiometricAuth.canAuthenticate(context)) {
-                                    BiometricAuth.authenticate(
-                                        activity = activity,
-                                        title = "Desactivar desbloqueo biométrico",
-                                        subtitle = "Confirma tu identidad",
-                                        onSuccess = {
-                                            Log.d("ArcheryScore_Debug", "✅ Biometría confirmada, deshabilitando")
-                                            settingsViewModel.setBiometricEnabled(false)
-                                        },
-                                        onError = { err ->
-                                            Log.e("ArcheryScore_Debug", "❌ Error biométrico al deshabilitar: $err")
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar("No se pudo confirmar identidad")
-                                            }
-                                        },
-                                        onFail = {
-                                            Log.w("ArcheryScore_Debug", "⚠️ Biometría cancelada al deshabilitar")
-                                        }
+                if (selectedTab == 0) {
+                    // Cuenta editable
+                    Text(text = "Cuenta", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    if (user != null) {
+                        var isEditing by remember { mutableStateOf(false) }
+                        var editedUsername by remember { mutableStateOf(user!!.username) }
+                        var editedTel by remember { mutableStateOf(user!!.tel) }
+                        var fieldError by remember { mutableStateOf<String?>(null) }
+
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                if (isEditing) {
+                                    OutlinedTextField(
+                                        value = editedUsername,
+                                        onValueChange = { editedUsername = it },
+                                        label = { Text("Nombre de usuario") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
                                     )
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(text = "Email", style = MaterialTheme.typography.labelMedium)
+                                    Text(
+                                        text = user!!.email,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 4.dp)
+                                    )
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = editedTel,
+                                        onValueChange = { editedTel = it },
+                                        label = { Text("Teléfono") },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                    fieldError?.let {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = it,
+                                            color = MaterialTheme.colorScheme.error,
+                                            style = MaterialTheme.typography.bodySmall
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Button(
+                                            onClick = {
+                                                fieldError = when {
+                                                    editedUsername.isBlank() -> "El nombre de usuario no puede estar vacío"
+                                                    else -> null
+                                                }
+                                                if (fieldError == null) {
+                                                    val updatedUser = user!!.copy(
+                                                        username = editedUsername,
+                                                        tel = editedTel
+                                                    )
+                                                    val proceedUpdate: () -> Unit = {
+                                                        settingsViewModel.updateUser(updatedUser)
+                                                        isEditing = false
+                                                    }
+                                                    if (biometricRequired && activity != null) {
+                                                        BiometricAuth.authenticate(
+                                                            activity = activity,
+                                                            title = "Confirmar cambios",
+                                                            subtitle = "Autoriza con huella o Face",
+                                                            onSuccess = { proceedUpdate() },
+                                                            onError = { err -> scope.launch { snackbarHostState.showSnackbar("Autenticación fallida: $err") } },
+                                                            onFail = { }
+                                                        )
+                                                    } else {
+                                                        proceedUpdate()
+                                                    }
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Guardar")
+                                        }
+                                        OutlinedButton(
+                                            onClick = {
+                                                editedUsername = user!!.username
+                                                editedTel = user!!.tel
+                                                fieldError = null
+                                                isEditing = false
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Cancelar")
+                                        }
+                                    }
                                 } else {
-                                    // Si no hay biometría disponible, permitir deshabilitar
-                                    settingsViewModel.setBiometricEnabled(false)
+                                    Text(
+                                        text = user!!.username.ifBlank { "Nombre no disponible" },
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = user!!.email,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    if (user!!.tel.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(text = user!!.tel, style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    if (!user!!.documento.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(text = "DNI: ${user!!.documento}", style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    if (!user!!.club.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(text = "Club: ${user!!.club}", style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    if (!user!!.fechaNacimiento.isNullOrBlank()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(text = "Fecha nac.: ${user!!.fechaNacimiento}", style = MaterialTheme.typography.bodyMedium)
+                                    }
+                                    if (user!!.roles.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        Text(
+                                            text = "Roles: ${user!!.roles.joinToString(", ")}",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(onClick = { isEditing = true }) {
+                                        Text("Editar datos")
+                                    }
                                 }
-                            } else {
-                                // Si se habilita, permitir directamente
-                                settingsViewModel.setBiometricEnabled(enabled)
                             }
                         }
-                    )
-                }
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Cambiar contraseña (solo si NO es usuario de Google)
-                if (!isGoogleUser) {
-                    Button(onClick = { showChangePasswordDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text("Cambiar contraseña")
+                    } else {
+                        Text("No se pudo cargar la información del usuario", color = MaterialTheme.colorScheme.error)
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Verificación FATARCO
+                    Text(text = "FATARCO", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (fatarcoEnabled) {
+                        Button(
+                            onClick = { showFatarcoVerifyDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Verificar mi perfil en FATARCO")
+                        }
+                    } else {
+                        Text(
+                            text = "La verificación FATARCO está deshabilitada en Ajustes.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 } else {
-                    Text(
-                        text = "La contraseña se gestiona mediante Google",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
+                    // Preferencias
+                    Text(text = "Preferencias", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Notificaciones")
+                        Switch(
+                            checked = notificationsEnabled,
+                            onCheckedChange = { enabled ->
+                                settingsViewModel.setNotificationsEnabled(enabled)
+                            }
+                        )
+                    }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                // Verificación FATARCO
-                Text(text = "Verificación FATARCO", style = MaterialTheme.typography.headlineSmall)
-                Spacer(modifier = Modifier.height(8.dp))
-                Button(
-                    onClick = { showFatarcoVerifyDialog = true },
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Verificar mi perfil en FATARCO")
-                }
+                    // Seguridad
+                    Text(text = "Seguridad", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Desbloqueo biométrico")
+                        Switch(
+                            checked = biometricEnabled,
+                            onCheckedChange = { enabled ->
+                                if (!enabled && biometricEnabled) {
+                                    if (activity != null && BiometricAuth.canAuthenticate(context)) {
+                                        BiometricAuth.authenticate(
+                                            activity = activity,
+                                            title = "Desactivar desbloqueo biométrico",
+                                            subtitle = "Confirma tu identidad",
+                                            onSuccess = {
+                                                Log.d("ArcheryScore_Debug", "✅ Biometría confirmada, deshabilitando")
+                                                settingsViewModel.setBiometricEnabled(false)
+                                            },
+                                            onError = { err ->
+                                                Log.e("ArcheryScore_Debug", "❌ Error biométrico al deshabilitar: $err")
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar("No se pudo confirmar identidad")
+                                                }
+                                            },
+                                            onFail = {
+                                                Log.w("ArcheryScore_Debug", "⚠️ Biometría cancelada al deshabilitar")
+                                            }
+                                        )
+                                    } else {
+                                        settingsViewModel.setBiometricEnabled(false)
+                                    }
+                                } else {
+                                    settingsViewModel.setBiometricEnabled(enabled)
+                                }
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                // Cerrar sesión
-                Button(
-                    onClick = {
-                        val doLogout: () -> Unit = { settingsViewModel.logout() }
-                        if (biometricRequired && activity != null) {
-                            BiometricAuth.authenticate(
-                                activity = activity,
-                                title = "Confirmar cierre de sesión",
-                                subtitle = "Autoriza con huella o Face",
-                                onSuccess = { doLogout() },
-                                onError = { err -> scope.launch { snackbarHostState.showSnackbar("Autenticación fallida: $err") } },
-                                onFail = { }
-                            )
-                        } else {
-                            doLogout()
+                    if (!isGoogleUser) {
+                        Button(onClick = { showChangePasswordDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Cambiar contraseña")
                         }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                ) {
-                    Text("Cerrar sesión", color = MaterialTheme.colorScheme.onError)
+                    } else {
+                        Text(
+                            text = "La contraseña se gestiona mediante Google",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Verificación FATARCO
+                    Text(text = "FATARCO", style = MaterialTheme.typography.headlineSmall)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Verificación FATARCO")
+                        Switch(
+                            checked = fatarcoEnabled,
+                            onCheckedChange = { enabled ->
+                                settingsViewModel.setFatarcoEnabled(enabled)
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Cerrar sesión
+                    Button(
+                        onClick = {
+                            val doLogout: () -> Unit = { settingsViewModel.logout() }
+                            if (biometricRequired && activity != null) {
+                                BiometricAuth.authenticate(
+                                    activity = activity,
+                                    title = "Confirmar cierre de sesión",
+                                    subtitle = "Autoriza con huella o Face",
+                                    onSuccess = { doLogout() },
+                                    onError = { err -> scope.launch { snackbarHostState.showSnackbar("Autenticación fallida: $err") } },
+                                    onFail = { }
+                                )
+                            } else {
+                                doLogout()
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Cerrar sesión", color = MaterialTheme.colorScheme.onError)
+                    }
                 }
 
                 if (isLoading) {
@@ -611,19 +689,7 @@ fun SettingsScreen(
                         Column {
                             when (val result = fatarcoVerificationResult) {
                                 is com.cegb03.archeryscore.data.model.FatarcoVerificationResult.Success -> {
-                                    val data = result.data
-                                    Text("DNI: ${data.dni}", style = MaterialTheme.typography.bodyMedium)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("Nombre: ${data.nombre}", style = MaterialTheme.typography.bodyMedium)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("Fecha Nac.: ${data.fechaNacimiento}", style = MaterialTheme.typography.bodyMedium)
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text("Club: ${data.club}", style = MaterialTheme.typography.bodyMedium)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Text("Estados:", style = MaterialTheme.typography.titleSmall)
-                                    data.estados.forEach { estado ->
-                                        Text("  • $estado", style = MaterialTheme.typography.bodySmall)
-                                    }
+                                    Text("Datos obtenidos. Revisa el diálogo de sincronización.")
                                 }
                                 is com.cegb03.archeryscore.data.model.FatarcoVerificationResult.NotFound -> {
                                     Text("No se encontró tu DNI en la base de datos de FATARCO.")
@@ -651,6 +717,103 @@ fun SettingsScreen(
                         }
                     }
                 )
+            }
+
+            if (showFatarcoMergeDialog) {
+                val data = (fatarcoVerificationResult as? com.cegb03.archeryscore.data.model.FatarcoVerificationResult.Success)?.data
+                if (data != null) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            showFatarcoMergeDialog = false
+                            settingsViewModel.clearFatarcoVerification()
+                        },
+                        title = { Text("Sincronizar datos FATARCO") },
+                        text = {
+                            Column {
+                                Text("Elige qué datos conservar", style = MaterialTheme.typography.bodyMedium)
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Switch(checked = useFatarcoNombre, onCheckedChange = { useFatarcoNombre = it })
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("Nombre")
+                                        Text("Actual: ${user?.username ?: "-"}", style = MaterialTheme.typography.bodySmall)
+                                        Text("FATARCO: ${data.nombre}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Switch(checked = useFatarcoDocumento, onCheckedChange = { useFatarcoDocumento = it })
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("DNI")
+                                        Text("Actual: ${user?.documento ?: "-"}", style = MaterialTheme.typography.bodySmall)
+                                        Text("FATARCO: ${data.dni}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Switch(checked = useFatarcoClub, onCheckedChange = { useFatarcoClub = it })
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("Club")
+                                        Text("Actual: ${user?.club ?: "-"}", style = MaterialTheme.typography.bodySmall)
+                                        Text("FATARCO: ${data.club}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Switch(checked = useFatarcoFechaNacimiento, onCheckedChange = { useFatarcoFechaNacimiento = it })
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("Fecha nac.")
+                                        Text("Actual: ${user?.fechaNacimiento ?: "-"}", style = MaterialTheme.typography.bodySmall)
+                                        Text("FATARCO: ${data.fechaNacimiento}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Switch(checked = useFatarcoRoles, onCheckedChange = { useFatarcoRoles = it })
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text("Roles")
+                                        Text("Actual: ${user?.roles?.joinToString(", ") ?: "-"}", style = MaterialTheme.typography.bodySmall)
+                                        Text("FATARCO: ${data.estados.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                settingsViewModel.applyFatarcoSelection(
+                                    data = data,
+                                    useNombre = useFatarcoNombre,
+                                    useDocumento = useFatarcoDocumento,
+                                    useClub = useFatarcoClub,
+                                    useFechaNacimiento = useFatarcoFechaNacimiento,
+                                    useRoles = useFatarcoRoles
+                                )
+                                showFatarcoMergeDialog = false
+                                settingsViewModel.clearFatarcoVerification()
+                            }) {
+                                Text("Guardar")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = {
+                                showFatarcoMergeDialog = false
+                                settingsViewModel.clearFatarcoVerification()
+                            }) {
+                                Text("Cancelar")
+                            }
+                        }
+                    )
+                }
             }
         }
     }

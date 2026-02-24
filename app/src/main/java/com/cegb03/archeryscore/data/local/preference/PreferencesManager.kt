@@ -15,6 +15,7 @@ class PreferencesManager(private val context: Context) {
     companion object {
         private val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
         private val BIOMETRIC_ENABLED = booleanPreferencesKey("biometric_enabled")
+        private val FATARCO_ENABLED = booleanPreferencesKey("fatarco_enabled")
     }
 
     val notificationsEnabledFlow: Flow<Boolean> = context.dataStore.data
@@ -44,6 +45,21 @@ class PreferencesManager(private val context: Context) {
         context.dataStore.edit { preferences ->
             preferences[BIOMETRIC_ENABLED] = enabled
             Log.d("ArcheryScore_Debug", "✅ Guardado biometric_enabled=$enabled en DataStore")
+        }
+    }
+
+    val fatarcoEnabledFlow: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            val value = preferences[FATARCO_ENABLED] ?: true
+            Log.d("ArcheryScore_Debug", "📍 fatarcoEnabledFlow emitiendo: $value")
+            value
+        }
+
+    suspend fun setFatarcoEnabled(enabled: Boolean) {
+        Log.d("ArcheryScore_Debug", "📝 setFatarcoEnabled: $enabled")
+        context.dataStore.edit { preferences ->
+            preferences[FATARCO_ENABLED] = enabled
+            Log.d("ArcheryScore_Debug", "✅ Guardado fatarco_enabled=$enabled en DataStore")
         }
     }
 

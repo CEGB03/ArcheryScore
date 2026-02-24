@@ -52,6 +52,13 @@ class SettingsViewModel @Inject constructor(
             initialValue = false
         )
 
+    val fatarcoEnabled: StateFlow<Boolean> = preferencesManager.fatarcoEnabledFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     // Supabase-only: Google login no aplica
     val isGoogleUser: StateFlow<Boolean> = MutableStateFlow(false)
         .stateIn(
@@ -188,6 +195,17 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setFatarcoEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            try {
+                preferencesManager.setFatarcoEnabled(enabled)
+                Log.d("ArcheryScore_Debug", "✅ FATARCO setting guardado en PreferencesManager")
+            } catch (e: Exception) {
+                Log.e("ArcheryScore_Debug", "❌ Error al guardar FATARCO setting", e)
+            }
+        }
+    }
+
     fun changePassword(newPassword: String) {
         viewModelScope.launch {
             _isLoading.value = true
@@ -237,6 +255,11 @@ class SettingsViewModel @Inject constructor(
                 when (result) {
                     is FatarcoVerificationResult.Success -> {
                         Log.d("ArcheryScore_Debug", "✅ Verificación exitosa: ${result.data.nombre}")
+                        val saved = repository.saveFatarcoProfile(result.data)
+                        if (!saved) {
+                            _errorMessage.value = "No se pudieron guardar los datos FATARCO"
+                            Log.w("ArcheryScore_Debug", "⚠️ No se pudo guardar FATARCO profile")
+                        }
                     }
                     is FatarcoVerificationResult.NotFound -> {
                         Log.w("ArcheryScore_Debug", "⚠️ DNI no encontrado en FATARCO")
@@ -256,6 +279,40 @@ class SettingsViewModel @Inject constructor(
 
     fun clearFatarcoVerification() {
         _fatarcoVerificationResult.value = null
+    }
+
+    fun applyFatarcoSelection(
+        data: com.cegb03.archeryscore.data.model.FatarcoArcherData,
+        useNombre: Boolean,
+        useDocumento: Boolean,
+        useClub: Boolean,
+        useFechaNacimiento: Boolean,
+        useRoles: Boolean
+    ) {
+        viewModelScope.launch {
+            val current = _user.value
+            if (current == null) {
+                _errorMessage.value = "No se pudo actualizar el perfil"
+                return@launch
+            }
+
+            val updatedUser = current.copy(
+                username = if (useNombre) data.nombre else current.username,
+                documento = if (useDocumento) data.dni else current.documento,
+                club = if (useClub) data.club else current.club,
+                fechaNacimiento = if (useFechaNacimiento) data.fechaNacimiento else current.fechaNacimiento,
+                roles = if (useRoles) data.estados else current.roles
+            )
+
+            val updated = repository.updateUser(updatedUser)
+            if (updated != null) {
+                _user.value = updated
+                Log.d("ArcheryScore_Debug", "✅ Perfil actualizado con selección FATARCO")
+            } else {
+                _errorMessage.value = "No se pudo actualizar el perfil"
+                Log.w("ArcheryScore_Debug", "⚠️ updateUser devolvió null")
+            }
+        }
     }
     fun clearError() {
         _errorMessage.value = null

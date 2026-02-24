@@ -19,6 +19,8 @@ data class UserProfile(
     @SerialName("email") val email: String,
     @SerialName("tel") val tel: String? = null,
     @SerialName("documento") val documento: String? = null, // DNI/CI para verificación FATARCO
+    @SerialName("club") val club: String? = null,
+    @SerialName("fecha_nacimiento") val fechaNacimiento: String? = null,
     @SerialName("role") val role: List<String> = listOf("arquero"), // Lista: arquero, entrenador, juez, admin
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null
@@ -30,7 +32,19 @@ data class UpdateProfileRequest(
     @SerialName("username") val username: String? = null,
     @SerialName("tel") val tel: String? = null,
     @SerialName("documento") val documento: String? = null,
+    @SerialName("club") val club: String? = null,
+    @SerialName("fecha_nacimiento") val fechaNacimiento: String? = null,
     @SerialName("role") val role: List<String>? = null
+)
+
+@Serializable
+data class FatarcoProfile(
+    @SerialName("user_id") val userId: String,
+    @SerialName("dni") val dni: String,
+    @SerialName("nombre") val nombre: String,
+    @SerialName("fecha_nacimiento") val fechaNacimiento: String? = null,
+    @SerialName("club") val club: String? = null,
+    @SerialName("roles") val roles: List<String> = emptyList()
 )
 
 // ============================================================================

@@ -2,6 +2,8 @@ package com.cegb03.archeryscore.data.remote.supabase.repository
 
 import android.util.Log
 import com.cegb03.archeryscore.data.remote.supabase.SupabaseClient
+import com.cegb03.archeryscore.data.model.FatarcoArcherData
+import com.cegb03.archeryscore.data.remote.supabase.models.FatarcoProfile
 import com.cegb03.archeryscore.data.remote.supabase.models.UpdateProfileRequest
 import com.cegb03.archeryscore.data.remote.supabase.models.UserProfile
 import io.github.jan.supabase.gotrue.auth
@@ -23,7 +25,7 @@ class SupabaseAuthRepository @Inject constructor() {
     
     private val client = SupabaseClient.client
     private val auth = client.auth
-    private val TAG = "SupabaseAuth_Debug"
+    private val TAG = "ArcheryScore_Debug"
     
     // ============================================================================
     // AUTENTICACIÓN
@@ -265,6 +267,8 @@ class SupabaseAuthRepository @Inject constructor() {
         username: String? = null,
         tel: String? = null,
         documento: String? = null,
+        club: String? = null,
+        fechaNacimiento: String? = null,
         roles: List<String>? = null
     ): Result<UserProfile> {
         return try {
@@ -282,6 +286,8 @@ class SupabaseAuthRepository @Inject constructor() {
                 username = username,
                 tel = tel,
                 documento = documento,
+                club = club,
+                fechaNacimiento = fechaNacimiento,
                 role = roles
             )
             
@@ -306,6 +312,35 @@ class SupabaseAuthRepository @Inject constructor() {
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Error al actualizar perfil: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Guardar datos completos de FATARCO en tabla dedicada.
+     */
+    suspend fun upsertFatarcoProfile(data: FatarcoArcherData): Result<Unit> {
+        return try {
+            val userId = getCurrentUserId()
+            if (userId == null) {
+                Log.e(TAG, "❌ Error: No hay usuario autenticado para FATARCO")
+                return Result.failure(Exception("No hay usuario autenticado"))
+            }
+
+            val profile = FatarcoProfile(
+                userId = userId,
+                dni = data.dni,
+                nombre = data.nombre,
+                fechaNacimiento = data.fechaNacimiento,
+                club = data.club,
+                roles = data.estados.distinct()
+            )
+
+            client.from("fatarco_profiles").upsert(profile)
+            Log.d(TAG, "✅ FATARCO profile guardado/actualizado")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Error guardando FATARCO profile: ${e.message}", e)
             Result.failure(e)
         }
     }
