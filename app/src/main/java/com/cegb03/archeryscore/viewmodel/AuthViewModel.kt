@@ -4,23 +4,18 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavController
-import com.cegb03.archeryscore.data.local.AuthTokenProvider
 import com.cegb03.archeryscore.data.local.preference.PreferencesManager
-import com.cegb03.archeryscore.data.model.GoogleUser
 import com.cegb03.archeryscore.data.repository.UserRepository
 import com.cegb03.archeryscore.ui.theme.Screen
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val repository: UserRepository,
-    private val tokenProvider: AuthTokenProvider,
     private val preferencesManager: PreferencesManager
 ) : ViewModel() {
 
@@ -40,26 +35,24 @@ class AuthViewModel @Inject constructor(
     private val _isInitialized = MutableStateFlow(false)
     val isInitialized: StateFlow<Boolean> = _isInitialized
 
+    private fun mapAuthError(rawMessage: String?): String {
+        val message = rawMessage ?: "Error desconocido"
+        return when {
+            message.contains("rate limit", ignoreCase = true) ->
+                "Limite de intentos alcanzado. Espera 60 segundos y vuelve a intentar."
+            message.contains("only request this after", ignoreCase = true) ->
+                "Demasiados intentos. Espera 30 segundos y vuelve a intentar."
+            else -> message
+        }
+    }
+
     // ✅ Función para verificar si ya está logueado al iniciar la app
     fun checkAuthStatus() {
         viewModelScope.launch {
             try {
-                // ⏰ Pequeño delay para asegurar que el token esté disponible
-                kotlinx.coroutines.delay(500)
-
-                val token = tokenProvider.getToken()
-                val userId = tokenProvider.getUserId()
-
-                // Verificación más robusta
-                val isValidSession = token != null &&
-                        userId != null &&
-                        token.isNotBlank() &&
-                        userId > 0
-
-                _isLoggedIn.value = isValidSession
+                _isLoggedIn.value = repository.isAuthenticated()
                 _isInitialized.value = true
 
-                Log.d("ArcheryScore_Debug", "🔍 Auth status - Token: ${token?.take(10)}..., UserId: $userId")
                 Log.d("ArcheryScore_Debug", "🔍 Auth status - LoggedIn: ${_isLoggedIn.value}")
             } catch (e: Exception) {
                 Log.e("ArcheryScore_Debug", "❌ Error en checkAuthStatus: ${e.message}")
@@ -72,9 +65,7 @@ class AuthViewModel @Inject constructor(
     // ✅ Función para refresh
     fun refresh() {
         viewModelScope.launch {
-            val token = tokenProvider.getToken()
-            val userId = tokenProvider.getUserId()
-            _isLoggedIn.value = token != null && userId != null
+            _isLoggedIn.value = repository.isAuthenticated()
             Log.d("ArcheryScore_Debug", "🔄 Auth refresh - LoggedIn: ${_isLoggedIn.value}")
         }
     }
@@ -106,10 +97,9 @@ class AuthViewModel @Inject constructor(
         Log.d("ArcheryScore_Debug", "🚪 Iniciando logout - limpiando token y preferencias")
         viewModelScope.launch {
             try {
-                // 1️⃣ Limpiar token
-                tokenProvider.clearToken()
-                Log.d("ArcheryScore_Debug", "✅ Token limpiado")
-//                biometricEnabledFlow
+                repository.logout()
+                Log.d("ArcheryScore_Debug", "✅ Sesión cerrada en Supabase")
+
                 // 2️⃣ Limpiar DataStore COMPLETO (incluyendo biometría)
                 Log.d("ArcheryScore_Debug", "🧹 Limpiando todas las preferencias del DataStore")
                 preferencesManager.clearAll()
@@ -149,8 +139,8 @@ class AuthViewModel @Inject constructor(
     // ════════════════════════════════════════════════════════════════════════════════
 
     // ✅ Login con usuario y contraseña (sin dependencia de Google)
-    fun loginWithCredentials(username: String, password: String) {
-        if (username.isEmpty() || password.isEmpty()) {
+    fun loginWithCredentials(email: String, password: String) {
+        if (email.isEmpty() || password.isEmpty()) {
             _errorMessage.value = "Usuario y contraseña son requeridos"
             return
         }
@@ -161,20 +151,20 @@ class AuthViewModel @Inject constructor(
                 _errorMessage.value = null
 
                 // Llamar al repositorio para validar credenciales
-                val (success, message) = repository.loginUser(username, password)
+                val (success, message) = repository.loginUser(email, password)
                 
                 if (success) {
                     _isLoggedIn.value = true
-                    Log.d("ArcheryScore_Debug", "✅ Login exitoso para: $username")
+                    Log.d("ArcheryScore_Debug", "✅ Login exitoso para: $email")
                     _errorMessage.value = null
                 } else {
                     _isLoggedIn.value = false
-                    _errorMessage.value = message ?: "Error en login"
+                    _errorMessage.value = mapAuthError(message ?: "Error en login")
                     Log.e("ArcheryScore_Debug", "❌ Error en login: $message")
                 }
             } catch (e: Exception) {
                 _isLoggedIn.value = false
-                _errorMessage.value = e.message ?: "Error desconocido"
+                _errorMessage.value = mapAuthError(e.message)
                 Log.e("ArcheryScore_Debug", "❌ Excepción en login", e)
             } finally {
                 _isLoading.value = false
@@ -186,10 +176,9 @@ class AuthViewModel @Inject constructor(
     fun registerWithCredentials(
         username: String,
         email: String,
-        password: String,
-        birthDate: String
+        password: String
     ) {
-        if (username.isEmpty() || email.isEmpty() || password.isEmpty() || birthDate.isEmpty()) {
+        if (username.isEmpty() || email.isEmpty() || password.isEmpty()) {
             _errorMessage.value = "Todos los campos son requeridos"
             return
         }
@@ -208,12 +197,12 @@ class AuthViewModel @Inject constructor(
                     _errorMessage.value = null
                 } else {
                     _isLoggedIn.value = false
-                    _errorMessage.value = message ?: "Error en registro"
+                    _errorMessage.value = mapAuthError(message ?: "Error en registro")
                     Log.e("ArcheryScore_Debug", "❌ Error en registro: $message")
                 }
             } catch (e: Exception) {
                 _isLoggedIn.value = false
-                _errorMessage.value = e.message ?: "Error desconocido"
+                _errorMessage.value = mapAuthError(e.message)
                 Log.e("ArcheryScore_Debug", "❌ Excepción en registro", e)
             } finally {
                 _isLoading.value = false

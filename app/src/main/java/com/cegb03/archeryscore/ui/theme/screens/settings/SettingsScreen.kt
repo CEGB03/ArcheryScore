@@ -13,9 +13,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import androidx.fragment.app.FragmentActivity
@@ -44,8 +46,12 @@ fun SettingsScreen(
     val logoutSuccess by settingsViewModel.logoutSuccess.collectAsState()
     val user by settingsViewModel.user.collectAsState()
     val changePasswordResult by settingsViewModel.changePasswordResult.collectAsState()
+    val fatarcoVerificationResult by settingsViewModel.fatarcoVerificationResult.collectAsState()
 
     var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var showFatarcoVerifyDialog by remember { mutableStateOf(false) }
+    var showFatarcoResultDialog by remember { mutableStateOf(false) }
+    var fatarcoDni by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var passwordError by remember { mutableStateOf<String?>(null) }
@@ -129,16 +135,14 @@ fun SettingsScreen(
         settingsViewModel.ensureUserLoaded()
     }
 
-    // Logout: sincroniza con AuthViewModel y navega
+    // Logout: solo observar, no llamar logout de nuevo
     LaunchedEffect(logoutSuccess) {
         if (logoutSuccess) {
-            authViewModel.logout()
             snackbarHostState.showSnackbar("Sesión cerrada correctamente")
-            navController.navigate(Screen.Access.route) {
-                launchSingleTop = true
-                popUpTo(0) { inclusive = true }
-            }
             settingsViewModel.clearLogoutFlag()
+            // SettingsViewModel.logout() ya hizo logout en Supabase y limpió DataStore
+            // Solo refrescamos AuthViewModel para que actualice su estado
+            authViewModel.refresh()
         }
     }
 
@@ -158,16 +162,18 @@ fun SettingsScreen(
         }
     }
 
+    // Resultado de verificación FATARCO
+    LaunchedEffect(fatarcoVerificationResult) {
+        fatarcoVerificationResult?.let { result ->
+            showFatarcoResultDialog = true
+        }
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Configuración") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Volver")
-                    }
-                },
                 colors = TopAppBarDefaults.topAppBarColors()
             )
         }
@@ -397,6 +403,18 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
+                // Verificación FATARCO
+                Text(text = "Verificación FATARCO", style = MaterialTheme.typography.headlineSmall)
+                Spacer(modifier = Modifier.height(8.dp))
+                Button(
+                    onClick = { showFatarcoVerifyDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Verificar mi perfil en FATARCO")
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
                 // Cerrar sesión
                 Button(
                     onClick = {
@@ -514,6 +532,122 @@ fun SettingsScreen(
                             passwordError = null
                         }) {
                             Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
+            // Dialog para ingresar DNI
+            if (showFatarcoVerifyDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showFatarcoVerifyDialog = false
+                        fatarcoDni = ""
+                    },
+                    title = { Text("Verificación FATARCO") },
+                    text = {
+                        Column {
+                            Text(
+                                text = "Ingresa tu DNI para verificar tu perfil en la base de datos de FATARCO.",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = fatarcoDni,
+                                onValueChange = { fatarcoDni = it },
+                                label = { Text("DNI") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                if (fatarcoDni.isNotBlank()) {
+                                    showFatarcoVerifyDialog = false
+                                    settingsViewModel.verifyFatarco(fatarcoDni.trim())
+                                    fatarcoDni = ""
+                                } else {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Debes ingresar un DNI")
+                                    }
+                                }
+                            }
+                        ) {
+                            Text("Verificar")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showFatarcoVerifyDialog = false
+                            fatarcoDni = ""
+                        }) {
+                            Text("Cancelar")
+                        }
+                    }
+                )
+            }
+
+            // Dialog de resultado FATARCO
+            if (showFatarcoResultDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showFatarcoResultDialog = false
+                        settingsViewModel.clearFatarcoVerification()
+                    },
+                    title = { 
+                        Text(
+                            when (fatarcoVerificationResult) {
+                                is com.cegb03.archeryscore.data.model.FatarcoVerificationResult.Success -> "✅ Perfil verificado"
+                                is com.cegb03.archeryscore.data.model.FatarcoVerificationResult.NotFound -> "⚠️ No encontrado"
+                                is com.cegb03.archeryscore.data.model.FatarcoVerificationResult.Error -> "❌ Error"
+                                else -> "Verificación FATARCO"
+                            }
+                        )
+                    },
+                    text = {
+                        Column {
+                            when (val result = fatarcoVerificationResult) {
+                                is com.cegb03.archeryscore.data.model.FatarcoVerificationResult.Success -> {
+                                    val data = result.data
+                                    Text("DNI: ${data.dni}", style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Nombre: ${data.nombre}", style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Fecha Nac.: ${data.fechaNacimiento}", style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text("Club: ${data.club}", style = MaterialTheme.typography.bodyMedium)
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text("Estados:", style = MaterialTheme.typography.titleSmall)
+                                    data.estados.forEach { estado ->
+                                        Text("  • $estado", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                is com.cegb03.archeryscore.data.model.FatarcoVerificationResult.NotFound -> {
+                                    Text("No se encontró tu DNI en la base de datos de FATARCO.")
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        "Verifica que tu documento esté correctamente configurado y que estés registrado en FATARCO.",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                                is com.cegb03.archeryscore.data.model.FatarcoVerificationResult.Error -> {
+                                    Text("Error: ${result.message}")
+                                }
+                                null -> {
+                                    Text("Verificando...")
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showFatarcoResultDialog = false
+                            settingsViewModel.clearFatarcoVerification()
+                        }) {
+                            Text("Cerrar")
                         }
                     }
                 )

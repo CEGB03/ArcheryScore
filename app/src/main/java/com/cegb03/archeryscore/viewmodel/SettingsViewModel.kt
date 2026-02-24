@@ -4,7 +4,9 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cegb03.archeryscore.data.local.preference.PreferencesManager
+import com.cegb03.archeryscore.data.model.FatarcoVerificationResult
 import com.cegb03.archeryscore.data.model.User
+import com.cegb03.archeryscore.data.repository.FatarcoRepository
 import com.cegb03.archeryscore.data.repository.UserRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -14,7 +16,8 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     val repository: UserRepository,
-    private val preferencesManager: PreferencesManager
+    private val preferencesManager: PreferencesManager,
+    private val fatarcoRepository: FatarcoRepository
 ) : ViewModel() {
 
     private val _user = MutableStateFlow<User?>(null)
@@ -32,6 +35,9 @@ class SettingsViewModel @Inject constructor(
     private val _changePasswordResult = MutableStateFlow<Result<Unit>?>(null)
     val changePasswordResult: StateFlow<Result<Unit>?> = _changePasswordResult.asStateFlow()
 
+    private val _fatarcoVerificationResult = MutableStateFlow<FatarcoVerificationResult?>(null)
+    val fatarcoVerificationResult: StateFlow<FatarcoVerificationResult?> = _fatarcoVerificationResult.asStateFlow()
+
     val notificationsEnabled: StateFlow<Boolean> = preferencesManager.notificationsEnabledFlow
         .stateIn(
             scope = viewModelScope,
@@ -46,18 +52,13 @@ class SettingsViewModel @Inject constructor(
             initialValue = false
         )
 
-    // Detectar si el usuario inició sesión con Google
-    val isGoogleUser: StateFlow<Boolean> = MutableStateFlow(false).apply {
-        viewModelScope.launch {
-            repository.getToken()?.let { token ->
-                value = token.startsWith("google_")
-            }
-        }
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = false
-    )
+    // Supabase-only: Google login no aplica
+    val isGoogleUser: StateFlow<Boolean> = MutableStateFlow(false)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
 
     // Control de carga para no repetir innecesariamente
     private var userLoaded = false
@@ -68,12 +69,11 @@ class SettingsViewModel @Inject constructor(
      */
     fun ensureUserLoaded() {
         if (userLoaded) return
-        val token = repository.getToken()
-        val userId = repository.getUserId()
-        Log.i("ArcheryScore_Debug", "ensureUserLoaded: token=$token userId=$userId")
-        if (token.isNullOrBlank() || userId == null) {
+        val isAuthenticated = repository.isAuthenticated()
+        Log.i("ArcheryScore_Debug", "ensureUserLoaded: isAuthenticated=$isAuthenticated")
+        if (!isAuthenticated) {
             if (!attemptedWithoutToken) {
-                Log.i("ArcheryScore_Debug", "No hay token o userId, no se carga usuario todavía")
+                Log.i("ArcheryScore_Debug", "No hay sesion Supabase, no se carga usuario todavía")
                 attemptedWithoutToken = true
             }
             return
@@ -219,6 +219,44 @@ class SettingsViewModel @Inject constructor(
         _changePasswordResult.value = null
     }
 
+
+    /**
+     * Verifica si el usuario existe en FATARCO por su DNI
+     */
+    fun verifyFatarco(dni: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            _fatarcoVerificationResult.value = null
+            
+            try {
+                Log.d("ArcheryScore_Debug", "🔍 Verificando DNI en FATARCO: $dni")
+                val result = fatarcoRepository.verifyUserByDni(dni)
+                _fatarcoVerificationResult.value = result
+                
+                when (result) {
+                    is FatarcoVerificationResult.Success -> {
+                        Log.d("ArcheryScore_Debug", "✅ Verificación exitosa: ${result.data.nombre}")
+                    }
+                    is FatarcoVerificationResult.NotFound -> {
+                        Log.w("ArcheryScore_Debug", "⚠️ DNI no encontrado en FATARCO")
+                    }
+                    is FatarcoVerificationResult.Error -> {
+                        Log.e("ArcheryScore_Debug", "❌ Error en verificación: ${result.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Error al verificar con FATARCO: ${e.localizedMessage ?: "desconocido"}"
+                Log.e("ArcheryScore_Debug", "❌ Exception en verifyFatarco", e)
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun clearFatarcoVerification() {
+        _fatarcoVerificationResult.value = null
+    }
     fun clearError() {
         _errorMessage.value = null
     }

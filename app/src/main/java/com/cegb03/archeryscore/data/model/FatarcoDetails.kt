@@ -38,3 +38,31 @@ sealed interface InvitationContent {
     data class Html(val data: InvitationHtml) : InvitationContent
     data class Pdf(val bytes: ByteArray) : InvitationContent
 }
+
+/**
+ * Respuesta del endpoint AJAX de FATARCO
+ */
+data class FatarcoSearchResponse(
+    val table_data: String,  // HTML con las filas de la tabla
+    val total_data: Int      // Total de resultados
+)
+
+/**
+ * Datos de un arquero extraídos del HTML de FATARCO
+ */
+data class FatarcoArcherData(
+    val dni: String,
+    val nombre: String,
+    val fechaNacimiento: String,
+    val club: String,
+    val estados: List<String>  // Lista de estados: "arquero", "entrenador", "juez", "infantil", "escuela"
+)
+
+/**
+ * Resultado de la verificación FATARCO
+ */
+sealed class FatarcoVerificationResult {
+    data class Success(val data: FatarcoArcherData) : FatarcoVerificationResult()
+    object NotFound : FatarcoVerificationResult()
+    data class Error(val message: String) : FatarcoVerificationResult()
+}

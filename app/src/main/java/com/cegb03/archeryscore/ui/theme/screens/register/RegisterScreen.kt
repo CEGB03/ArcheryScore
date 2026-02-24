@@ -2,6 +2,10 @@ package com.cegb03.archeryscore.ui.theme.screens.register
 
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
@@ -9,14 +13,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.cegb03.archeryscore.viewmodel.UserViewModel
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.hilt.navigation.compose.hiltViewModel
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
+import com.cegb03.archeryscore.ui.theme.Screen
+import com.cegb03.archeryscore.viewmodel.AuthViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,15 +30,20 @@ fun RegisterScreen(
     navController: NavController,
     onBackPressed: () -> Unit = {},
     onLoginPressed: () -> Unit = {},
-    userViewModel: UserViewModel = hiltViewModel()
+    authViewModel: AuthViewModel = hiltViewModel()
 ) {
     var email by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
-    var errorMessage by remember { mutableStateOf("") }
-    val coroutineScope = rememberCoroutineScope()
-    var successMessage by remember { mutableStateOf("") }
+    var localErrorMessage by remember { mutableStateOf("") }
+
+    val isLoading by authViewModel.isLoading.collectAsState()
+    val errorMessage by authViewModel.errorMessage.collectAsState()
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+    
+    val focusManager = LocalFocusManager.current
+    val scrollState = rememberScrollState()
 
     Scaffold(
         topBar = {
@@ -50,6 +61,7 @@ fun RegisterScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(scrollState)
                 .padding(32.dp)
                 .padding(paddingValues),
             verticalArrangement = Arrangement.Center,
@@ -63,7 +75,13 @@ fun RegisterScreen(
                 onValueChange = { username = it },
                 label = { Text("Nombre de usuario") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                )
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -73,7 +91,14 @@ fun RegisterScreen(
                 onValueChange = { email = it },
                 label = { Text("Email") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                )
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -84,7 +109,14 @@ fun RegisterScreen(
                 label = { Text("Contraseña") },
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                )
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -95,56 +127,73 @@ fun RegisterScreen(
                 label = { Text("Confirmar contraseña") },
                 visualTransformation = PasswordVisualTransformation(),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        if (username.isNotBlank() && email.isNotBlank() && 
+                            password.isNotBlank() && confirmPassword.isNotBlank() &&
+                            password == confirmPassword) {
+                            authViewModel.registerWithCredentials(username, email, password)
+                        }
+                    }
+                )
             )
 
-            if (errorMessage.isNotEmpty()) {
+            if (localErrorMessage.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
+                Text(text = localErrorMessage, color = MaterialTheme.colorScheme.error)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
-                    errorMessage = ""
-                    successMessage = ""
+                    localErrorMessage = ""
 
                     when {
                         username.isBlank() || email.isBlank() || password.isBlank() || confirmPassword.isBlank() -> {
-                            errorMessage = "Todos los campos son obligatorios"
+                            localErrorMessage = "Todos los campos son obligatorios"
                         }
                         password != confirmPassword -> {
-                            errorMessage = "Las contraseñas no coinciden"
+                            localErrorMessage = "Las contraseñas no coinciden"
                         }
                         else -> {
-                            coroutineScope.launch {
-                                val (wasRegistered, message) = userViewModel.registerUser(username, email, password)
-                                if (wasRegistered) {
-                                    successMessage = message ?: "Usuario registrado correctamente"
-                                    delay(2000)
-                                    navController.popBackStack()
-                                } else {
-                                    errorMessage = message ?: "No se pudo registrar el usuario. Intente nuevamente."
-                                }
-                            }
+                            authViewModel.registerWithCredentials(username, email, password)
                         }
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
+                    .height(48.dp),
+                enabled = !isLoading
             ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .size(18.dp)
+                            .padding(end = 8.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
                 Text("Registrarme")
             }
 
-            if (errorMessage.isNotEmpty()) {
+            if (!errorMessage.isNullOrBlank()) {
                 Spacer(modifier = Modifier.height(12.dp))
-                Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
+                Text(text = errorMessage ?: "", color = MaterialTheme.colorScheme.error)
             }
+        }
+    }
 
-            if (successMessage.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(text = successMessage, color = MaterialTheme.colorScheme.primary)
-            }
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            // Volver a LoginScreen, que detectará isLoggedIn y volverá a Inicio
+            onBackPressed()
         }
     }
 }

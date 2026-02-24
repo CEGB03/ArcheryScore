@@ -123,7 +123,7 @@ fun AccessScreen(
                 if (isLoginMode) {
                     authViewModel.loginWithCredentials(username, password)
                 } else {
-                    authViewModel.registerWithCredentials(username, username, password, "")
+                    authViewModel.registerWithCredentials(username, username, password)
                 }
             },
             modifier = Modifier

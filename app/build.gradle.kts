@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -7,6 +9,13 @@ plugins {
     alias(libs.plugins.hilt.android)
     kotlin("kapt")
     id("com.google.gms.google-services")
+}
+
+// 🔐 Cargar credenciales desde local.properties
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
 }
 
 android {
@@ -25,8 +34,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
         // 🔐 Credenciales de Supabase desde local.properties (GITIGNORED)
-        val supabaseUrl = project.findProperty("SUPABASE_URL") as String? ?: "https://CONFIGURAR_EN_LOCAL_PROPERTIES"
-        val supabaseAnonKey = project.findProperty("SUPABASE_ANON_KEY") as String? ?: "CONFIGURAR_EN_LOCAL_PROPERTIES"
+        val supabaseUrl = localProperties.getProperty("SUPABASE_URL") ?: "https://CONFIGURAR_EN_LOCAL_PROPERTIES"
+        val supabaseAnonKey = localProperties.getProperty("SUPABASE_ANON_KEY") ?: "CONFIGURAR_EN_LOCAL_PROPERTIES"
         
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
@@ -82,6 +91,7 @@ dependencies {
     // Retrofit & OkHttp
     implementation(libs.com.squareup.retrofit2)
     implementation(libs.com.squareup.retrofit2.converter.gson)
+    implementation(libs.com.squareup.retrofit2.converter.scalars)
     implementation(libs.com.squareup.okhttp3)
     implementation(libs.com.squareup.okhttp3.logging.interceptor)
     

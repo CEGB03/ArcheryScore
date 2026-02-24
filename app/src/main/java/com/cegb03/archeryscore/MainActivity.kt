@@ -41,6 +41,7 @@ import com.cegb03.archeryscore.ui.theme.screens.access.AccessScreen
 import com.cegb03.archeryscore.ui.theme.screens.login.LoginScreen
 import com.cegb03.archeryscore.ui.theme.screens.register.RegisterScreen
 import com.cegb03.archeryscore.ui.theme.screens.home.HomeStatsScreen
+import com.cegb03.archeryscore.ui.theme.screens.settings.SettingsScreen
 import com.cegb03.archeryscore.ui.theme.screens.trainings.TrainingsScreen
 import com.cegb03.archeryscore.ui.theme.screens.tournaments.TournamentsScreen
 import com.cegb03.archeryscore.viewmodel.AuthViewModel
@@ -84,6 +85,9 @@ fun ArcheryScoreApp(authViewModel: AuthViewModel = hiltViewModel()) {
 @Composable
 fun MainAppContent() {
     Log.d("ArcheryScore_Debug", "📋 MainAppContent - Composable iniciado")
+    val authViewModel: AuthViewModel = hiltViewModel()
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
+    
     var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.INICIO) }
     var profileSubScreen by rememberSaveable { mutableStateOf<ProfileScreen>(ProfileScreen.LOGIN) }
     var backPressedCount by rememberSaveable { mutableStateOf(0) }
@@ -185,22 +189,28 @@ fun MainAppContent() {
                     Log.d("ArcheryScore_Debug", "✅ Navegación - Scaffold TORNEOS renderizado")
                 }
                 AppDestinations.PERFIL -> {
-                    when (profileSubScreen) {
-                        ProfileScreen.LOGIN -> {
-                            LoginScreen(
-                                navController = navController,
-                                onBackPressed = { 
-                                    currentDestination = AppDestinations.INICIO
-                                    backPressedCount = 0
-                                },
-                                onRegisterPressed = { profileSubScreen = ProfileScreen.REGISTER }
-                            )
-                        }
-                        ProfileScreen.REGISTER -> {
-                            RegisterScreen(
-                                navController = navController,
-                                onBackPressed = { profileSubScreen = ProfileScreen.LOGIN }
-                            )
+                    if (isLoggedIn) {
+                        // Usuario autenticado: mostrar pantalla de configuración
+                        SettingsScreen(navController = navController)
+                    } else {
+                        // Usuario no autenticado: mostrar login/registro
+                        when (profileSubScreen) {
+                            ProfileScreen.LOGIN -> {
+                                LoginScreen(
+                                    navController = navController,
+                                    onBackPressed = { 
+                                        currentDestination = AppDestinations.INICIO
+                                        backPressedCount = 0
+                                    },
+                                    onRegisterPressed = { profileSubScreen = ProfileScreen.REGISTER }
+                                )
+                            }
+                            ProfileScreen.REGISTER -> {
+                                RegisterScreen(
+                                    navController = navController,
+                                    onBackPressed = { profileSubScreen = ProfileScreen.LOGIN }
+                                )
+                            }
                         }
                     }
                 }

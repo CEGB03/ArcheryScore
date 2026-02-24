@@ -10,7 +10,7 @@
     <!--android:icon="@mipmap/ic_launcher"-->
     <application
         android:name=".util.AppContextProvider"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@drawable/wa_80_cm_archery_target"

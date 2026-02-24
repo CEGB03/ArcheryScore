@@ -1,6 +1,8 @@
 package com.cegb03.archeryscore.ui.theme.screens.login
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
@@ -11,16 +13,17 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.cegb03.archeryscore.data.repository.UserRepository
 import com.cegb03.archeryscore.ui.theme.Screen
 import com.cegb03.archeryscore.viewmodel.AuthViewModel
-import com.cegb03.archeryscore.viewmodel.UserViewModel
-import com.cegb03.archeryscore.viewmodel.SettingsViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -30,54 +33,30 @@ fun LoginScreen(
     navController: NavController,
     onBackPressed: () -> Unit = {},
     onRegisterPressed: () -> Unit = {},
-    userViewModel: UserViewModel = hiltViewModel(),
     authViewModel: AuthViewModel = hiltViewModel()
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
 
-    val loginResult by userViewModel.loginSuccess.collectAsState()
-    val isLoading by userViewModel.isLoading.collectAsState()
-    val errorMsg by userViewModel.errorMessage.collectAsState()
+    val isLoading by authViewModel.isLoading.collectAsState()
+    val errorMsg by authViewModel.errorMessage.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    var hasNavigated by remember { mutableStateOf(false) }
-
-    val settingsViewModel: SettingsViewModel = hiltViewModel()
-    val user by settingsViewModel.user.collectAsState()
+    val focusManager = LocalFocusManager.current
 
     val isLoggedIn by authViewModel.isLoggedIn.collectAsState()
 
-    // Si ya está logueado, saltar a FeedScreen automáticamente
-    LaunchedEffect(isLoggedIn) {
-        if (isLoggedIn) {
-            navController.navigate(Screen.Feed.route) {
-                launchSingleTop = true
-                popUpTo(Screen.Login.route) { inclusive = true }
-            }
-        }
-    }
-
-    // 🔹 Limpiar el estado al entrar al login
+    // Limpiar el estado al entrar al login
     LaunchedEffect(Unit) {
         authViewModel.clearAuthState()
     }
 
-    LaunchedEffect(loginResult) {
-        if (loginResult == true && !hasNavigated) {
-            hasNavigated = true
-            authViewModel.refresh()
-            delay(100)
-            //DebugDev.refreshUserIfLoggedIn()
-
-            navController.navigate(Screen.Feed.route) {
-                popUpTo(Screen.Login.route) { inclusive = true }
-                launchSingleTop = true
-            }
-
-            userViewModel.clearLoginResult()
+    // Si ya está logueado, volver a Inicio
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            onBackPressed()
         }
     }
 
@@ -111,7 +90,14 @@ fun LoginScreen(
                 onValueChange = { email = it },
                 label = { Text("Email") },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Email,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                )
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -129,16 +115,26 @@ fun LoginScreen(
                         Icon(imageVector = image, contentDescription = description)
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        focusManager.clearFocus()
+                        if (email.isNotBlank() && password.isNotBlank()) {
+                            authViewModel.loginWithCredentials(email, password)
+                        }
+                    }
+                )
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Button(
                 onClick = {
-                    userViewModel.loginUser(email, password) {
-                        authViewModel.refresh()
-                    }
+                    authViewModel.loginWithCredentials(email, password)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !isLoading

@@ -2,6 +2,12 @@ package com.cegb03.archeryscore.data.remote.supabase
 
 import android.util.Log
 import com.cegb03.archeryscore.BuildConfig
+import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.gotrue.Auth
+import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.realtime.Realtime
 
 /**
  * Cliente Singleton de Supabase para la app de Archery Score
@@ -11,58 +17,40 @@ import com.cegb03.archeryscore.BuildConfig
  * - SUPABASE_ANON_KEY: Anon/Public key para cliente
  * 
  * No exponemos credenciales en el código fuente.
- * 
- * ⚠️ IMPLEMENTACIÓN TEMPORAL:
- * La integración de Supabase-kt está siendo investigada debido a problemas de disponibilidad 
- * en repositorios Maven. Actualmente usa Firebase Auth y Retrofit para el backend.
- * 
- * PRÓXIMOS PASOS:
- * 1. Resolver la disponibilidad de supabase-kt en un repositorio Maven público
- * 2. Migrar gradualmente de Firebase Auth a Supabase GoTrue
- * 3. Reemplazar Retrofit con Supabase Postgrest para queries
  */
 object SupabaseClient {
     
     private const val TAG = "ArcheryScore_Debug"
     
     /**
-     * Credenciales de Supabase desde BuildConfig
+     * Cliente Supabase inicializado con módulos necesarios
      */
-    val supabaseUrl: String
-        get() = BuildConfig.SUPABASE_URL
-    
-    val supabaseKey: String
-        get() = BuildConfig.SUPABASE_ANON_KEY
-    
-    init {
-        Log.d(TAG, "SupabaseClient inicializado")
-        Log.d(TAG, "URL: ${BuildConfig.SUPABASE_URL}")
+    val client: SupabaseClient by lazy {
+        createSupabaseClient(
+            supabaseUrl = BuildConfig.SUPABASE_URL,
+            supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+        ) {
+            install(Postgrest)
+            install(Auth)
+            install(Realtime)
+        }.also {
+            Log.d(TAG, "✅ SupabaseClient inicializado")
+            Log.d(TAG, "URL: ${BuildConfig.SUPABASE_URL}")
+        }
     }
     
     /**
-     * Placeholder para obtener el ID del usuario
-     * TODO: Implementar con Supabase GoTrue cuando esté disponible
+     * Obtiene el ID del usuario autenticado
      */
-    fun currentUserId(): String? {
-        // Temporalmente retorna null - será implementado con Supabase GoTrue
-        return null
-    }
+    fun currentUserId(): String? = client.auth.currentUserOrNull()?.id
     
     /**
-     * Placeholder para verificar autenticación
-     * TODO: Implementar con Supabase GoTrue cuando esté disponible
+     * Verifica si hay un usuario autenticado
      */
-    fun isAuthenticated(): Boolean {
-        // Temporalmente retorna false - será implementado con Supabase GoTrue
-        return false
-    }
+    fun isAuthenticated(): Boolean = client.auth.currentUserOrNull() != null
     
     /**
-     * Placeholder para obtener email del usuario
-     * TODO: Implementar con Supabase GoTrue cuando esté disponible
+     * Obtiene el email del usuario autenticado
      */
-    fun currentUserEmail(): String? {
-        // Temporalmente retorna null - será implementado con Supabase GoTrue
-        return null
-    }
+    fun currentUserEmail(): String? = client.auth.currentUserOrNull()?.email
 }
